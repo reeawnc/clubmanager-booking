@@ -27,16 +27,16 @@ jobs:
           echo "Repository root contents:"
           ls -la
           echo ""
-          echo "Checking for bookings directory:"
-          if [ -d "bookings" ]; then
-            echo "✅ bookings directory exists!"
+          echo "Checking for Bookings directory:"
+          if [ -d "Bookings" ]; then
+            echo "✅ Bookings directory exists!"
             echo "Bookings directory contents:"
-            ls -la bookings/
+            ls -la Bookings/
             echo ""
             echo "Bookings/api directory contents:"
-            ls -la bookings/api/ || echo "❌ bookings/api not found"
+            ls -la Bookings/api/ || echo "❌ Bookings/api not found"
           else
-            echo "❌ bookings directory NOT FOUND"
+            echo "❌ Bookings directory NOT FOUND"
           fi
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -44,11 +44,11 @@ jobs:
           node-version: '18'
       - name: Install dependencies
         run: |
-          cd bookings
+          cd Bookings
           npm ci
       - name: Build frontend
         run: |
-          cd bookings
+          cd Bookings
           npm run build
       - name: Install OIDC Client from Core Package
         run: npm install @actions/core@1.6.0 @actions/http-client
@@ -68,8 +68,8 @@ jobs:
           action: "upload"
           ###### Repository/Build Configurations - These values can be configured to match your app requirements. ######
           # For more information regarding Static Web App workflow configurations, please visit: https://aka.ms/swaworkflowconfig
-          app_location: "bookings" # App source code path
-          api_location: "bookings/api" # Api source code path - optional
+          app_location: "Bookings" # App source code path
+          api_location: "Bookings/api" # Api source code path - optional
           output_location: "dist" # Built app content directory - optional
           github_id_token: ${{ steps.idtoken.outputs.result }}
           ###### End of Repository/Build Configurations ######
