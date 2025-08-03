@@ -1,6 +1,9 @@
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using System;
+using System.Net.Http;
+using System.Text;
+using Newtonsoft.Json;
 
 namespace BookingsApi.Tools
 {
@@ -32,44 +35,47 @@ namespace BookingsApi.Tools
                     ? dateValue?.ToString() 
                     : DateTime.Now.ToString("dd MMM yy");
                 
-                // For now, return mock court data
-                // TODO: Replace with actual court availability logic
-                var mockData = new
+                // Call the actual Courts function to get real data
+                using (var httpClient = new HttpClient())
                 {
-                    Courts = new[]
+                    // Get the function URL from environment or use a default
+                    var functionUrl = Environment.GetEnvironmentVariable("COURTS_FUNCTION_URL") ?? 
+                                    "https://clubmanager-booking.azurewebsites.net/api/Courts";
+                    
+                    // Add date as query parameter
+                    var url = $"{functionUrl}?date={Uri.EscapeDataString(date)}";
+                    
+                    var response = await httpClient.GetAsync(url);
+                    
+                    if (!response.IsSuccessStatusCode)
                     {
-                        new {
-                            Name = "Court 1",
-                            Bookings = new[]
+                        return $"Error calling Courts function: {response.StatusCode} - {await response.Content.ReadAsStringAsync()}";
+                    }
+                    
+                    var jsonResponse = await response.Content.ReadAsStringAsync();
+                    
+                    // Parse the response from the Courts function
+                    var courtsData = JsonConvert.DeserializeObject<BookingsApi.Models.RootObject>(jsonResponse);
+                    
+                    // Format the data for the AI to understand
+                    var formattedData = new
+                    {
+                        Date = date,
+                        Courts = courtsData.Courts.Select(court => new
+                        {
+                            Name = court.ColumnHeading,
+                            Cells = court.Cells.Select(cell => new
                             {
-                                new { Time = "09:00-10:00", Player = "John Smith" },
-                                new { Time = "14:00-15:00", Player = "Training" }
-                            },
-                            Available = new[]
-                            {
-                                "10:00-14:00",
-                                "15:00-18:00"
-                            }
-                        },
-                        new {
-                            Name = "Court 2", 
-                            Bookings = new[]
-                            {
-                                new { Time = "10:00-11:00", Player = "Sarah Johnson" },
-                                new { Time = "16:00-17:00", Player = "Mike Wilson" }
-                            },
-                            Available = new[]
-                            {
-                                "09:00-10:00",
-                                "11:00-16:00",
-                                "17:00-18:00"
-                            }
-                        }
-                    },
-                    Date = date
-                };
-                
-                return await Task.FromResult(System.Text.Json.JsonSerializer.Serialize(mockData));
+                                TimeSlot = cell.TimeSlot,
+                                Status = cell.CssClass,
+                                Player = cell.ToolTip,
+                                IsBooked = !string.IsNullOrEmpty(cell.ToolTip) && cell.ToolTip != "Available"
+                            }).ToList()
+                        }).ToList()
+                    };
+                     
+                    return JsonConvert.SerializeObject(formattedData);
+                }
             }
             catch (Exception ex)
             {
