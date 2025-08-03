@@ -3,6 +3,7 @@ using System.Threading.Tasks;
 using System;
 using System.Net.Http;
 using System.Text;
+using System.Linq;
 using Newtonsoft.Json;
 
 namespace BookingsApi.Tools
@@ -38,19 +39,25 @@ namespace BookingsApi.Tools
                 // Call the actual Courts function to get real data
                 using (var httpClient = new HttpClient())
                 {
-                    // Get the function URL from environment or use a default
-                    var functionUrl = Environment.GetEnvironmentVariable("COURTS_FUNCTION_URL") ?? 
-                                    "https://clubmanager-booking.azurewebsites.net/api/Courts";
+                    // Use the Static Web Apps URL since both functions are in the same environment
+                    var functionUrl = "https://lemon-cliff-0ffa36b03.1.azurestaticapps.net/api/Courts";
                     
                     // Add date as query parameter
                     var url = $"{functionUrl}?date={Uri.EscapeDataString(date)}";
+                    
+                    // Add function key if available
+                    var functionKey = Environment.GetEnvironmentVariable("COURTS_FUNCTION_KEY");
+                    if (!string.IsNullOrEmpty(functionKey))
+                    {
+                        httpClient.DefaultRequestHeaders.Add("x-functions-key", functionKey);
+                    }
                     
                     var response = await httpClient.GetAsync(url);
                     
                     if (!response.IsSuccessStatusCode)
                     {
                         return $"Error calling Courts function: {response.StatusCode} - {await response.Content.ReadAsStringAsync()}";
-                    }
+                    } 
                     
                     var jsonResponse = await response.Content.ReadAsStringAsync();
                     
