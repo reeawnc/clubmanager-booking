@@ -22,6 +22,22 @@ jobs:
         with:
           submodules: true
           lfs: false
+      - name: Debug - List repository contents
+        run: |
+          echo "Repository root contents:"
+          ls -la
+          echo ""
+          echo "Checking for bookings directory:"
+          if [ -d "bookings" ]; then
+            echo "✅ bookings directory exists!"
+            echo "Bookings directory contents:"
+            ls -la bookings/
+            echo ""
+            echo "Bookings/api directory contents:"
+            ls -la bookings/api/ || echo "❌ bookings/api not found"
+          else
+            echo "❌ bookings directory NOT FOUND"
+          fi
       - name: Install OIDC Client from Core Package
         run: npm install @actions/core@1.6.0 @actions/http-client
       - name: Get Id Token
