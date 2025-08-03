@@ -52,5 +52,5 @@ jobs:
         uses: Azure/functions-action@v1
         with:
           app-name: ${{ env.AZURE_FUNCTIONAPP_NAME }}
-          publish-profile: ${{ secrets.clubmanager_booking_032D }}
+          publish-profile: ${{ secrets.CLUBMANAGER_BOOKING_032D }}
           package: ${{ env.AZURE_FUNCTIONAPP_PACKAGE_PATH }}
