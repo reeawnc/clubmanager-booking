@@ -38,6 +38,20 @@ jobs:
           else
             echo "❌ bookings directory NOT FOUND"
           fi
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+          cache-dependency-path: bookings/package-lock.json
+      - name: Install dependencies
+        run: |
+          cd bookings
+          npm ci
+      - name: Build frontend
+        run: |
+          cd bookings
+          npm run build
       - name: Install OIDC Client from Core Package
         run: npm install @actions/core@1.6.0 @actions/http-client
       - name: Get Id Token
