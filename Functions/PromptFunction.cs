@@ -75,10 +75,14 @@ namespace clubmanager_booking.Functions
                 // Call OpenAI API
                 var response = await CallOpenAIAsync(promptRequest.Prompt, tools);
                 
-                // Process tool calls if any
+                // Process tool calls and get AI response with tool results
                 var toolCalls = new List<ToolCall>();
+                var finalResponse = response;
+                
                 if (response.Choices[0].Message.ToolCalls?.Count > 0)
                 {
+                    var toolResults = new List<string>();
+                    
                     foreach (var toolCall in response.Choices[0].Message.ToolCalls)
                     {
                         if (toolCall is ChatCompletionsFunctionToolCall functionCall)
@@ -97,20 +101,87 @@ namespace clubmanager_booking.Functions
                                     Parameters = parameters,
                                     Result = result
                                 });
+                                
+                                toolResults.Add($"{tool.Name}: {result}");
                             }
                         }
+                    }
+                    
+                    // Create a follow-up prompt with tool results
+                    if (toolResults.Any())
+                    {
+                        var followUpPrompt = $"Based on this user request: \"{promptRequest.Prompt}\"\n\nI have gathered the following information:\n{string.Join("\n", toolResults)}\n\n";
+                        
+                        // Add specific formatting instructions for court availability
+                        var hasCourtData = toolCalls.Any(tc => tc.ToolName == "get_court_availability");
+                        if (hasCourtData)
+                        {
+                            followUpPrompt += @"Format your response EXACTLY like this structure:
+
+[Brief intro sentence with day and date]
+
+### Booked Slots:
+- **Court 1:**
+  - **HH:MM - HH:MM**: Player Name
+  - **HH:MM - HH:MM**: Player Name
+
+- **Court 2:**
+  - **HH:MM - HH:MM**: Player Name
+  - **HH:MM - HH:MM**: Training
+
+- **Court 3:**
+  - **HH:MM - HH:MM**: Player Name
+
+### Available Slots:
+- **Court 1:**
+  - **HH:MM - HH:MM**: Bookable slot
+  - **HH:MM - HH:MM**: Bookable slot
+
+- **Court 2:**
+  - **HH:MM - HH:MM**: Bookable slot
+
+- **Court 3:**
+  - **HH:MM - HH:MM**: Bookable slot
+  - **HH:MM - HH:MM**: Bookable slot
+
+[Closing helpful statement]
+
+RULES:
+- Always use ""### Booked Slots:"" and ""### Available Slots:""
+- Always use ""- **Court X:**"" format
+- Always use ""  - **HH:MM - HH:MM**: "" for time slots (note the 2 spaces)
+- Use ""Bookable slot"" for available times
+- Use ""Training"" for training sessions
+- Use actual player names for booked slots
+- Always include day and date in intro
+- Always add helpful closing statement
+
+";
+                        }
+                        
+                        followUpPrompt += "Please provide a helpful response to the user based on this information.";
+                        
+                        var finalOptions = new ChatCompletionsOptions
+                        {
+                            DeploymentName = "gpt-4o-mini"
+                        };
+                        
+                        finalOptions.Messages.Add(new ChatRequestUserMessage(followUpPrompt));
+                        
+                        finalResponse = await _openAIClient.GetChatCompletionsAsync(finalOptions);
                     }
                 }
                 
                 return new OkObjectResult(new PromptResponse
                 {
                     Success = true,
-                    Response = response.Choices[0].Message.Content ?? "",
+                    Response = finalResponse.Choices[0].Message.Content ?? "",
                     SessionId = promptRequest.SessionId,
                     ToolCalls = toolCalls.Any() ? toolCalls : null,
                     Metadata = new Dictionary<string, object>
                     {
-                        ["usage"] = response.Usage
+                        ["usage"] = finalResponse.Usage,
+                        ["toolCallsMade"] = toolCalls.Count
                     }
                 });
             }
