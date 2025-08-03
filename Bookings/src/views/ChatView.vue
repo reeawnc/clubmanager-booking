@@ -66,6 +66,7 @@
           <textarea
             v-model="inputMessage"
             @keydown="handleKeyDown"
+            @input="autoResize"
             placeholder="Ask about court availability, bookings, or players..."
             class="message-input"
             rows="1"
@@ -178,6 +179,13 @@ const handleKeyDown = (event: KeyboardEvent) => {
   }
 }
 
+const autoResize = () => {
+  if (messageInput.value) {
+    messageInput.value.style.height = 'auto'
+    messageInput.value.style.height = Math.min(messageInput.value.scrollHeight, 120) + 'px'
+  }
+}
+
 const scrollToBottom = async () => {
   await nextTick()
   if (messagesContainer.value) {
@@ -195,14 +203,21 @@ onMounted(() => {
   display: flex;
   flex-direction: column;
   height: 100vh;
+  height: 100dvh; /* Use dynamic viewport height for mobile */
   background: #1a1a1a;
   color: #e5e5e5;
 }
 
 .chat-header {
   border-bottom: 1px solid #333;
-  padding: 1rem 2rem;
+  padding: 1rem 1rem;
   background: #212121;
+}
+
+@media (min-width: 640px) {
+  .chat-header {
+    padding: 1rem 2rem;
+  }
 }
 
 .header-content {
@@ -219,9 +234,15 @@ onMounted(() => {
 }
 
 .chat-title {
-  font-size: 1.25rem;
+  font-size: 1.125rem;
   font-weight: 600;
   color: #fff;
+}
+
+@media (min-width: 640px) {
+  .chat-title {
+    font-size: 1.25rem;
+  }
 }
 
 .test-btn,
@@ -250,7 +271,13 @@ onMounted(() => {
 .messages-container {
   flex: 1;
   overflow-y: auto;
-  padding: 0 2rem;
+  padding: 0 1rem;
+}
+
+@media (min-width: 640px) {
+  .messages-container {
+    padding: 0 2rem;
+  }
 }
 
 .welcome-section {
@@ -320,8 +347,16 @@ onMounted(() => {
 
 .input-section {
   border-top: 1px solid #333;
-  padding: 1.5rem 2rem;
+  padding: 1rem 1rem;
   background: #212121;
+  /* Ensure input stays above mobile browser UI */
+  padding-bottom: max(1rem, env(safe-area-inset-bottom));
+}
+
+@media (min-width: 640px) {
+  .input-section {
+    padding: 1.5rem 2rem;
+  }
 }
 
 .input-container {
@@ -332,12 +367,19 @@ onMounted(() => {
 .input-wrapper {
   display: flex;
   align-items: flex-end;
-  gap: 0.75rem;
+  gap: 0.5rem;
   background: #2a2a2a;
   border: 1px solid #444;
   border-radius: 0.75rem;
   padding: 0.75rem;
   transition: border-color 0.2s;
+  min-height: 48px; /* Ensure minimum height for mobile touch targets */
+}
+
+@media (min-width: 640px) {
+  .input-wrapper {
+    gap: 0.75rem;
+  }
 }
 
 .input-wrapper:focus-within {
@@ -356,6 +398,8 @@ onMounted(() => {
   line-height: 1.5;
   max-height: 120px;
   overflow-y: auto;
+  min-height: 20px; /* Ensure minimum height */
+  padding: 0.25rem 0; /* Add some padding for better touch */
 }
 
 .message-input::placeholder {
@@ -373,8 +417,9 @@ onMounted(() => {
   align-items: center;
   justify-content: center;
   transition: background-color 0.2s;
-  min-width: 40px;
-  height: 40px;
+  min-width: 44px; /* Larger touch target for mobile */
+  height: 44px; /* Larger touch target for mobile */
+  flex-shrink: 0; /* Prevent button from shrinking */
 }
 
 .send-btn:hover:not(:disabled) {
