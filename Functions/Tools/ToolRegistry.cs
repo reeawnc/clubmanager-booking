@@ -32,6 +32,7 @@ namespace clubmanager_booking.Functions.Tools
             // Register default tools here
             RegisterTool(new GetCurrentTimeTool());
             RegisterTool(new CalculateTool());
+            RegisterTool(new GetCourtAvailabilityTool());
         }
     }
 } 
