@@ -105,7 +105,7 @@ const quickPrompts = [
   },
   {
     id: 5,
-    text: "What time slowts are availalbe to this day next week after 5pm?"
+    text: "What time slots are availalbe on this day next week after 5pm?"
   }
 ]
 
