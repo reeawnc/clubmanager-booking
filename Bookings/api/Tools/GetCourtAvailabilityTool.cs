@@ -1,10 +1,9 @@
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using System;
-using System.Net.Http;
-using System.Text;
 using System.Linq;
 using Newtonsoft.Json;
+using BookingsApi.Services;
 
 namespace BookingsApi.Tools
 {
@@ -36,53 +35,28 @@ namespace BookingsApi.Tools
                     ? dateValue?.ToString() 
                     : DateTime.Now.ToString("dd MMM yy");
                 
-                // Call the actual Courts function to get real data
-                using (var httpClient = new HttpClient())
-                {
-                    // Use the Static Web Apps URL since both functions are in the same environment
-                    var functionUrl = "https://lemon-cliff-0ffa36b03.1.azurestaticapps.net/api/Courts";
-                    
-                    // Add date as query parameter
-                    var url = $"{functionUrl}?date={Uri.EscapeDataString(date)}";
-                    
-                    // Add function key if available
-                    var functionKey = Environment.GetEnvironmentVariable("COURTS_FUNCTION_KEY");
-                    if (!string.IsNullOrEmpty(functionKey))
+                // Use the shared court availability service
+                var courtAvailabilityService = new CourtAvailabilityService();
+                var courtsData = await courtAvailabilityService.GetCourtAvailabilityAsync(date);
+                
+                // Format the data for the AI to understand
+                var formattedData = new
+                { 
+                    Date = date,
+                    Courts = courtsData.Courts.Select(court => new
                     {
-                        httpClient.DefaultRequestHeaders.Add("x-functions-key", functionKey);
-                    }
-                    
-                    var response = await httpClient.GetAsync(url);
-                    
-                    if (!response.IsSuccessStatusCode)
-                    {
-                        return $"Error calling Courts function: {response.StatusCode} - {await response.Content.ReadAsStringAsync()}";
-                    } 
-                    
-                    var jsonResponse = await response.Content.ReadAsStringAsync();
-                    
-                    // Parse the response from the Courts function
-                    var courtsData = JsonConvert.DeserializeObject<BookingsApi.Models.RootObject>(jsonResponse);
-                    
-                    // Format the data for the AI to understand
-                    var formattedData = new
-                    {
-                        Date = date,
-                        Courts = courtsData.Courts.Select(court => new
+                        Name = court.ColumnHeading,
+                        Cells = court.Cells.Select(cell => new
                         {
-                            Name = court.ColumnHeading,
-                            Cells = court.Cells.Select(cell => new
-                            {
-                                TimeSlot = cell.TimeSlot,
-                                Status = cell.CssClass,
-                                Player = cell.ToolTip,
-                                IsBooked = !string.IsNullOrEmpty(cell.ToolTip) && cell.ToolTip != "Available"
-                            }).ToList()
+                            TimeSlot = cell.TimeSlot,
+                            Status = cell.CssClass,
+                            Player = cell.ToolTip,
+                            IsBooked = !string.IsNullOrEmpty(cell.ToolTip) && cell.ToolTip != "Available"
                         }).ToList()
-                    };
-                     
-                    return JsonConvert.SerializeObject(formattedData);
-                }
+                    }).ToList()
+                };
+                 
+                return JsonConvert.SerializeObject(formattedData);
             }
             catch (Exception ex)
             {
