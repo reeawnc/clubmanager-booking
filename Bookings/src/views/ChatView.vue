@@ -75,11 +75,13 @@
 
 <script setup lang="ts">
 import { ref, nextTick, onMounted } from 'vue'
+import { storeToRefs } from 'pinia'
 import { useChatStore } from '@/stores/chat'
 import ChatMessage from '@/components/ChatMessage.vue'
 
 const chatStore = useChatStore()
-const { messages, isLoading, sendMessage: storeSendMessage, clearChat } = chatStore
+const { messages, isLoading } = storeToRefs(chatStore)
+const { sendMessage: storeSendMessage, clearChat } = chatStore
 
 const inputMessage = ref('')
 const messageInput = ref<HTMLTextAreaElement>()
@@ -295,7 +297,6 @@ onMounted(() => {
 
 .prompt-btn:active {
   transform: translateY(0);
-}
 }
 
 /* Welcome section styles removed since welcome was removed */
