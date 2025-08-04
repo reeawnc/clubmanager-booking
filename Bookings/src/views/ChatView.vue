@@ -96,7 +96,7 @@ const quickPrompts = [
   },
   {
     id: 3,
-    text: "Book a court for 6:00pm today"
+    text: "Who's playing next?"
   },
   {
     id: 4,
