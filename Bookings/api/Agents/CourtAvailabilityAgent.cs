@@ -191,7 +191,7 @@ RULES:
 - 'Bookable slot' is a placeholder for available times
 - Show both players names if available 
 - Show if its a friendly or box league game if available
-
+- If the prompt asks about a specific time or who's playing next, focus only on relevant time slots rather than showing all available slots
 ";
         }
     }
