@@ -122,13 +122,13 @@ namespace BookingsApi.Tools
                     debugInfo.Add($"      Player: {cell.Player1 ?? "null"}");
                     debugInfo.Add($"      ToolTip: {cell.ToolTip ?? "null"}");
                     debugInfo.Add($"      Status: {cell.CssClass ?? "null"}");
-                    debugInfo.Add($"      Contains time '{time}': {cell.TimeSlot.Contains(time)}");
+                    debugInfo.Add($"      Starts with '{time}': {cell.TimeSlot.StartsWith(time + " -") || cell.TimeSlot.StartsWith(time + " ")}");
                     debugInfo.Add($"      ToolTip contains 'Bookable slot': {cell.ToolTip?.Contains("Bookable slot")}");
                     debugInfo.Add($"      ToolTip contains 'Available': {cell.ToolTip?.Contains("Available")}");
                     debugInfo.Add($"      Player1 contains 'Book this slot': {cell.Player1?.Contains("Book this slot")}");
                     
                     // Check if this slot matches our criteria
-                    bool timeMatches = cell.TimeSlot.Contains(time);
+                    bool timeMatches = cell.TimeSlot.StartsWith(time + " -") || cell.TimeSlot.StartsWith(time + " ");
                     bool isAvailable = (cell.ToolTip?.Contains("Bookable slot") == true || 
                                       cell.ToolTip?.Contains("Available") == true || 
                                       cell.Player1?.Contains("Book this slot") == true);
@@ -147,9 +147,9 @@ namespace BookingsApi.Tools
                     }
                 }
                 
-                // Find available slot at the requested time
+                // Find available slot at the requested time - use exact start time matching
                 var availableSlot = court.Cells.FirstOrDefault(cell => 
-                    cell.TimeSlot.Contains(time) && 
+                    (cell.TimeSlot.StartsWith(time + " -") || cell.TimeSlot.StartsWith(time + " ")) && 
                     (cell.ToolTip?.Contains("Bookable slot") == true || 
                      cell.ToolTip?.Contains("Available") == true || 
                      cell.Player1?.Contains("Book this slot") == true));
