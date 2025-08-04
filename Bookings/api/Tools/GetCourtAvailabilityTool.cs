@@ -35,11 +35,11 @@ namespace BookingsApi.Tools
                     ? dateValue?.ToString() 
                     : DateTime.Now.ToString("dd MMM yy");
                 
-                Console.WriteLine($"=== GET COURT AVAILABILITY TOOL ===");
-                Console.WriteLine($"Parameters: {JsonConvert.SerializeObject(parameters)}");
-                Console.WriteLine($"Date being used: {date}");
-                Console.WriteLine($"Current DateTime.Now: {DateTime.Now}");
-                Console.WriteLine($"Current DateTime.Now.ToString('dd MMM yy'): {DateTime.Now.ToString("dd MMM yy")}");
+                // Console.WriteLine($"=== GET COURT AVAILABILITY TOOL ===");
+                // Console.WriteLine($"Parameters: {JsonConvert.SerializeObject(parameters)}");
+                // Console.WriteLine($"Date being used: {date}");
+                // Console.WriteLine($"Current DateTime.Now: {DateTime.Now}");
+                // Console.WriteLine($"Current DateTime.Now.ToString('dd MMM yy'): {DateTime.Now.ToString("dd MMM yy")}");
                 
                 // Use the shared court availability service
                 var courtAvailabilityService = new CourtAvailabilityService();
@@ -64,10 +64,10 @@ namespace BookingsApi.Tools
                     }).ToList()
                 };
                 
-                var result = JsonConvert.SerializeObject(formattedData);
-                Console.WriteLine($"Formatted data result: {result}");
-                Console.WriteLine($"=== END GET COURT AVAILABILITY TOOL ===");
-                 
+                                var result = JsonConvert.SerializeObject(formattedData);
+                // Console.WriteLine($"Formatted data result: {result}");
+                // Console.WriteLine($"=== END GET COURT AVAILABILITY TOOL ===");
+                
                 return result;
             }
             catch (Exception ex)

@@ -26,7 +26,7 @@ namespace BookingsApi
             
             // Get OpenAI API key from environment variable
             var apiKey = Environment.GetEnvironmentVariable("OpenAI_API_Key");
-            Console.WriteLine($"API Key found: {!string.IsNullOrEmpty(apiKey)}");
+            // Console.WriteLine($"API Key found: {!string.IsNullOrEmpty(apiKey)}");
             
             if (string.IsNullOrEmpty(apiKey))
             {
@@ -85,9 +85,9 @@ namespace BookingsApi
                 var tools = CreateOpenAITools();
                 
                 // Call OpenAI API
-                Console.WriteLine($"=== INITIAL PROMPT ===");
-                Console.WriteLine($"Prompt: {promptRequest.Prompt}");
-                Console.WriteLine($"=== END INITIAL PROMPT ===");
+                // Console.WriteLine($"=== INITIAL PROMPT ===");
+                // Console.WriteLine($"Prompt: {promptRequest.Prompt}");
+                // Console.WriteLine($"=== END INITIAL PROMPT ===");
                 
                 var response = await CallOpenAIAsync(promptRequest.Prompt, tools);
                 
@@ -109,14 +109,14 @@ namespace BookingsApi
                                 var parameters = JsonSerializer.Deserialize<Dictionary<string, object>>(
                                     functionCall.Arguments) ?? new Dictionary<string, object>();
                                 
-                                Console.WriteLine($"=== TOOL CALL START ===");
-                                Console.WriteLine($"Tool: {tool.Name}");
-                                Console.WriteLine($"Parameters: {JsonSerializer.Serialize(parameters)}");
+                                // Console.WriteLine($"=== TOOL CALL START ===");
+                                // Console.WriteLine($"Tool: {tool.Name}");
+                                // Console.WriteLine($"Parameters: {JsonSerializer.Serialize(parameters)}");
                                 
                                 var toolResult = await tool.ExecuteAsync(parameters);
                                 
-                                Console.WriteLine($"Tool Result: {toolResult}");
-                                Console.WriteLine($"=== TOOL CALL END ===");
+                                // Console.WriteLine($"Tool Result: {toolResult}");
+                                // Console.WriteLine($"=== TOOL CALL END ===");
                                 
                                 toolCalls.Add(new ToolCall
                                 {
@@ -135,9 +135,9 @@ namespace BookingsApi
                     {
                         var followUpPrompt = $"Based on this user request: \"{promptRequest.Prompt}\"\n\nI have gathered the following information:\n{string.Join("\n", toolResults)}\n\n";
                         
-                        Console.WriteLine($"=== FOLLOW-UP PROMPT ===");
-                        Console.WriteLine($"Follow-up prompt: {followUpPrompt}");
-                        Console.WriteLine($"=== END FOLLOW-UP PROMPT ===");
+                        // Console.WriteLine($"=== FOLLOW-UP PROMPT ===");
+                        // Console.WriteLine($"Follow-up prompt: {followUpPrompt}");
+                        // Console.WriteLine($"=== END FOLLOW-UP PROMPT ===");
                         
                         // Add specific formatting instructions for court availability
                         var hasCourtData = toolCalls.Any(tc => tc.ToolName == "get_court_availability");
@@ -182,7 +182,9 @@ RULES:
 - Always include day and date in intro
 - Each court should be listed separately with its own time slots
 - Do not combine or mix time slots from different courts
-
+- 'Player Name' is a placeholder for the actual player name, its not booked
+- 'Training' is a placeholder for training sessions
+- 'Bookable slot' is a placeholder for available times
 ";
                         }
                         
@@ -197,9 +199,9 @@ RULES:
                         
                         finalResponse = await _openAIClient.GetChatCompletionsAsync(finalOptions);
                         
-                        Console.WriteLine($"=== FINAL LLM RESPONSE ===");
-                        Console.WriteLine($"Response: {finalResponse.Choices[0].Message.Content}");
-                        Console.WriteLine($"=== END FINAL LLM RESPONSE ===");
+                        // Console.WriteLine($"=== FINAL LLM RESPONSE ===");
+                        // Console.WriteLine($"Response: {finalResponse.Choices[0].Message.Content}");
+                        // Console.WriteLine($"=== END FINAL LLM RESPONSE ===");
                     }
                 }
                 
