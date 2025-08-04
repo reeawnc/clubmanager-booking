@@ -76,27 +76,66 @@ namespace BookingsApi.Tools
         
         private async Task<string> FindAndBookBestCourt(RootObject courtData, string date, string time, int duration)
         {
+            var debugInfo = new List<string>();
+            debugInfo.Add($"=== BOOKING TOOL DEBUG ===");
+            debugInfo.Add($"Looking for time: {time}");
+            debugInfo.Add($"Date: {date}");
+            
             // Define court preference order (Court 1 → Court 2 → Court 3)
             var courtPreferences = new[] { "Court 1", "Court 2", "Court 3" };
             
             foreach (var preferredCourt in courtPreferences)
             {
+                debugInfo.Add($"\n--- Checking {preferredCourt} ---");
+                
                 var court = courtData.Courts.FirstOrDefault(c => c.ColumnHeading.StartsWith(preferredCourt));
-                if (court == null) continue;
+                if (court == null) 
+                {
+                    debugInfo.Add($"Court not found: {preferredCourt}");
+                    continue;
+                }
+                
+                debugInfo.Add($"Found court: {court.ColumnHeading}");
+                debugInfo.Add($"CourtID: {court.CourtID}");
+                debugInfo.Add($"Total cells: {court.Cells.Count}");
+                
+                // Check all slots for this court
+                foreach (var cell in court.Cells)
+                {
+                    debugInfo.Add($"  Slot: {cell.TimeSlot}");
+                    debugInfo.Add($"    Player: {cell.Player1 ?? "null"}");
+                    debugInfo.Add($"    ToolTip: {cell.ToolTip ?? "null"}");
+                    debugInfo.Add($"    Status: {cell.CssClass ?? "null"}");
+                    debugInfo.Add($"    Contains time '{time}': {cell.TimeSlot.Contains(time)}");
+                    debugInfo.Add($"    ToolTip contains 'Bookable slot': {cell.ToolTip?.Contains("Bookable slot")}");
+                    debugInfo.Add($"    ToolTip contains 'Available': {cell.ToolTip?.Contains("Available")}");
+                    debugInfo.Add($"    Player1 contains 'Book this slot': {cell.Player1?.Contains("Book this slot")}");
+                }
                 
                 // Find available slot at the requested time
                 var availableSlot = court.Cells.FirstOrDefault(cell => 
                     cell.TimeSlot.Contains(time) && 
-                    (cell.ToolTip.Contains("Bookable slot") || cell.ToolTip.Contains("Available")));
+                    (cell.ToolTip?.Contains("Bookable slot") == true || 
+                     cell.ToolTip?.Contains("Available") == true || 
+                     cell.Player1?.Contains("Book this slot") == true));
                 
                 if (availableSlot != null)
                 {
+                    debugInfo.Add($"✅ Found available slot: {availableSlot.TimeSlot}");
+                    debugInfo.Add($"CourtSlotID: {availableSlot.CourtSlotID}");
+                    
                     // Found an available slot! Now book it
-                    return await MakeBookingRequest(court.CourtID.ToString(), availableSlot.CourtSlotID.ToString(), date, time);
+                    var bookingResult = await MakeBookingRequest(court.CourtID.ToString(), availableSlot.CourtSlotID.ToString(), date, time);
+                    return $"{bookingResult}\n\n{string.Join("\n", debugInfo)}";
+                }
+                else
+                {
+                    debugInfo.Add($"❌ No available slot found for {preferredCourt} at {time}");
                 }
             }
             
-            return $"No available courts found for {time} on {date}. All courts are either booked or unavailable.";
+            debugInfo.Add($"\n=== END BOOKING TOOL DEBUG ===");
+            return $"No available courts found for {time} on {date}. All courts are either booked or unavailable.\n\n{string.Join("\n", debugInfo)}";
         }
         
         private async Task<string> MakeBookingRequest(string courtID, string courtSlotID, string date, string time)
