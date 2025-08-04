@@ -291,11 +291,11 @@ onMounted(() => {
   background: #21262d;
   border: 1px solid #30363d;
   color: #e6edf3;
-  padding: 1rem 1.5rem;
-  border-radius: 12px;
+  padding: 0.75rem 1rem;
+  border-radius: 10px;
   cursor: pointer;
   transition: all 0.2s ease;
-  font-size: 0.95rem;
+  font-size: 0.85rem;
   text-align: left;
   display: flex;
   align-items: center;
