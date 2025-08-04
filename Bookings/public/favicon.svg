@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32">
+  <!-- Background circle -->
+  <circle cx="16" cy="16" r="15" fill="#0d1117" stroke="#30363d" stroke-width="1"/>
+  
+  <!-- Squash racket handle -->
+  <rect x="14" y="20" width="4" height="8" rx="2" fill="#58a6ff"/>
+  
+  <!-- Squash racket head -->
+  <ellipse cx="16" cy="12" rx="8" ry="6" fill="none" stroke="#58a6ff" stroke-width="2"/>
+  
+  <!-- Racket strings -->
+  <line x1="8" y1="12" x2="24" y2="12" stroke="#58a6ff" stroke-width="0.5"/>
+  <line x1="8" y1="10" x2="24" y2="10" stroke="#58a6ff" stroke-width="0.5"/>
+  <line x1="8" y1="14" x2="24" y2="14" stroke="#58a6ff" stroke-width="0.5"/>
+  <line x1="8" y1="8" x2="24" y2="8" stroke="#58a6ff" stroke-width="0.5"/>
+  <line x1="8" y1="16" x2="24" y2="16" stroke="#58a6ff" stroke-width="0.5"/>
+  
+  <!-- Vertical strings -->
+  <line x1="12" y1="6" x2="12" y2="18" stroke="#58a6ff" stroke-width="0.5"/>
+  <line x1="16" y1="6" x2="16" y2="18" stroke="#58a6ff" stroke-width="0.5"/>
+  <line x1="20" y1="6" x2="20" y2="18" stroke="#58a6ff" stroke-width="0.5"/>
+  
+  <!-- Small squash ball -->
+  <circle cx="24" cy="20" r="2" fill="#e6edf3"/>
+</svg> 

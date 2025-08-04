@@ -16,6 +16,22 @@
 
     <!-- Messages Area -->
     <main class="messages-container" ref="messagesContainer">
+      <!-- Initial prompt buttons when no messages -->
+      <div v-if="messages.length === 0" class="initial-prompts">
+        <h2>Squash Court Assistant</h2>
+        <p>Choose a quick action or ask your own question:</p>
+        <div class="prompt-buttons">
+          <button 
+            v-for="prompt in quickPrompts" 
+            :key="prompt.id"
+            @click="sendQuickAction(prompt.text)"
+            class="prompt-btn"
+          >
+            {{ prompt.text }}
+          </button>
+        </div>
+      </div>
+
       <!-- Chat messages -->
       <div class="messages-list">
         <ChatMessage 
@@ -69,31 +85,26 @@ const inputMessage = ref('')
 const messageInput = ref<HTMLTextAreaElement>()
 const messagesContainer = ref<HTMLElement>()
 
-const quickActions = [
+const quickPrompts = [
   {
     id: 1,
-    label: "🎾 Show me court availability for today after 5pm",
-    prompt: "Show me the court availability for today after 5pm"
+    text: "🎾 Show me court availability for today after 5pm"
   },
   {
     id: 2,
-    label: "👥 Who's playing today after 5pm?",
-    prompt: "whos playing today after 5pm"
+    text: "👥 Who's playing today after 5pm?"
   },
   {
     id: 3,
-    label: "📅 Show me today's court availability",
-    prompt: "Show me the court availability for today"
+    text: "📅 Show me today's court availability"
   },
   {
     id: 4,
-    label: "🕰️ What time slots are available tomorrow?",
-    prompt: "What time slots are available tomorrow?"
+    text: "🕰️ What time slots are available tomorrow?"
   },
   {
     id: 5,
-    label: "🏋️ Are there any training sessions today?",
-    prompt: "Are there any training sessions scheduled for today?"
+    text: "🏋️ Are there any training sessions today?"
   }
 ]
 
@@ -226,6 +237,65 @@ onMounted(() => {
   flex: 1;
   overflow-y: auto;
   padding: 0.5rem;
+}
+
+/* Initial prompts styling */
+.initial-prompts {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 2rem;
+  height: 100%;
+}
+
+.initial-prompts h2 {
+  color: #e6edf3;
+  font-size: 2rem;
+  margin-bottom: 0.5rem;
+  font-weight: 600;
+}
+
+.initial-prompts p {
+  color: #7d8590;
+  font-size: 1.1rem;
+  margin-bottom: 2rem;
+}
+
+.prompt-buttons {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  width: 100%;
+  max-width: 500px;
+}
+
+.prompt-btn {
+  background: #21262d;
+  border: 1px solid #30363d;
+  color: #e6edf3;
+  padding: 1rem 1.5rem;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-size: 0.95rem;
+  text-align: left;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.prompt-btn:hover {
+  background: #30363d;
+  border-color: #58a6ff;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(88, 166, 255, 0.15);
+}
+
+.prompt-btn:active {
+  transform: translateY(0);
+}
 }
 
 /* Welcome section styles removed since welcome was removed */
