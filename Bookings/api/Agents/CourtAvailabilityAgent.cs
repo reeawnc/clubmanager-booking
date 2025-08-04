@@ -170,36 +170,13 @@ You have access to tools that can fetch real-time court availability data.";
 
         private static string GetCourtAvailabilityFormattingInstructions()
         {
-            return @"Format your response EXACTLY like this structure:
+            return @"Format your response with these rules in mind:
 
 [Brief intro sentence with day and date]
 
-### Booked Slots:
-- **Court 1:**
-  - **HH:MM - HH:MM**: Player Name
-  - **HH:MM - HH:MM**: Player Name
-
-- **Court 2:**
-  - **HH:MM - HH:MM**: Player Name
-  - **HH:MM - HH:MM**: Training
-
-- **Court 3:**
-  - **HH:MM - HH:MM**: Player Name
-
-### Available Slots:
-- **Court 1:**
-  - **HH:MM - HH:MM**: Bookable slot
-  - **HH:MM - HH:MM**: Bookable slot
-
-- **Court 2:**
-  - **HH:MM - HH:MM**: Bookable slot
-
-- **Court 3:**
-  - **HH:MM - HH:MM**: Bookable slot
-  - **HH:MM - HH:MM**: Bookable slot
+[Information]
 
 RULES:
-- Always use ""### Booked Slots:"" and ""### Available Slots:""
 - Always separate slots by court (Court 1, Court 2, Court 3) - do not mix courts together
 - Always use ""- **Court X:**"" format for court headers
 - Always use ""  - **HH:MM - HH:MM**: "" for time slots (note the 2 spaces)
@@ -212,6 +189,8 @@ RULES:
 - 'Player Name' is a placeholder for the actual player name, its not booked
 - 'Training' is a placeholder for training sessions
 - 'Bookable slot' is a placeholder for available times
+- Show both players names if available 
+- Show if its a friendly or box league game if available
 
 ";
         }
