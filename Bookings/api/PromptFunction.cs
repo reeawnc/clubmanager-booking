@@ -30,7 +30,7 @@ namespace BookingsApi
                 Console.WriteLine($"[{DateTime.UtcNow:yyyy-MM-dd HH:mm:ss}] Initializing Sentry");
                 SentrySdk.Init(options =>
                 {
-                    options.Dsn = "https://5b17f5890cb87b20cb1558c7854bc9ab04599786036018944.ingest.de.sentry.io/4509799";
+                    options.Dsn = "https://5b17f5789cb87b20cb1558c7854bc9ab@o4509786033618944.ingest.de.sentry.io/4509786040303696";
                     options.Debug = true; // Enable in development
                     options.TracesSampleRate = 1.0; // Capture 100% of transactions for performance monitoring
                     options.Environment = Environment.GetEnvironmentVariable("AZURE_FUNCTIONS_ENVIRONMENT") ?? "Development";
