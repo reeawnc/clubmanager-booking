@@ -25,11 +25,12 @@ namespace BookingsApi.Agents
         {
             var today = DateTime.Now;
             var formattedDate = today.ToString("dddd, MMMM d, yyyy"); // e.g., "Monday, January 15, 2024"
+            var currentTime = today.ToString("HH:mm"); // e.g., "14:30"
             
             return $@"You are a helpful assistant specializing in squash court availability. 
 Your role is to help users find available court times and understand current bookings.
 
-Today's date is: {formattedDate}
+Current time in Dublin, Ireland: {formattedDate} at {currentTime}
 
 When responding about court availability:
 - Always provide clear, organized information
