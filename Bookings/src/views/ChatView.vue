@@ -49,7 +49,7 @@
             v-model="inputMessage"
             @keydown="handleKeyDown"
             @input="autoResize"
-            placeholder="Ask about court availability, bookings, or players..."
+            placeholder="Ask about courts, bookings or players..."
             class="message-input"
             rows="1"
             ref="messageInput"
