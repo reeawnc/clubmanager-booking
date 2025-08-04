@@ -9,7 +9,6 @@ using Newtonsoft.Json;
 using BookingsApi.Services;
 using BookingsApi.Models;
 using System.Linq;
-using Sentry;
 
 namespace BookingsApi.Tools
 {

@@ -12,7 +12,6 @@ using System.Linq;
 using System.Threading.Tasks;
 using System;
 using System.IO;
-using Sentry; // Add Sentry using
 
 namespace BookingsApi
 {
@@ -26,23 +25,6 @@ namespace BookingsApi
             {
                 Console.WriteLine($"[{DateTime.UtcNow:yyyy-MM-dd HH:mm:ss}] PromptFunction constructor started");
                 
-                // Initialize Sentry
-                Console.WriteLine($"[{DateTime.UtcNow:yyyy-MM-dd HH:mm:ss}] Initializing Sentry");
-                SentrySdk.Init(options =>
-                {
-                    options.Dsn = "https://824b06e59fb2a0e6c9929caaa65f580d@o4509786033618944.ingest.de.sentry.io/4509786176421968";                    
-                    options.Debug = true; // Enable in development
-                    options.TracesSampleRate = 1.0; // Capture 100% of transactions for performance monitoring
-                    options.Environment = Environment.GetEnvironmentVariable("AZURE_FUNCTIONS_ENVIRONMENT") ?? "Development";
-                });
-
-                // Add some useful tags using ConfigureScope
-                SentrySdk.ConfigureScope(scope =>
-                {
-                    scope.SetTag("service", "squash-court-booking-api");
-                    scope.SetTag("version", "1.0.0");
-                });
-
                 // Get OpenAI API key from environment variable
                 Console.WriteLine($"[{DateTime.UtcNow:yyyy-MM-dd HH:mm:ss}] Getting OpenAI API key");
                 var apiKey = Environment.GetEnvironmentVariable("OpenAI_API_Key");
@@ -93,17 +75,6 @@ namespace BookingsApi
                 try
                 {
                 Console.WriteLine($"[{DateTime.UtcNow:yyyy-MM-dd HH:mm:ss}] Processing POST request");
-                // Add Sentry context and verify step
-                SentrySdk.ConfigureScope(scope =>
-                {
-                    scope.SetTag("function", "PromptFunction");
-                    scope.SetTag("method", req.Method);
-                    scope.SetExtra("user_agent", req.Headers["User-Agent"].ToString());
-                    scope.SetExtra("content_type", req.ContentType);
-                });
-
-                // Sentry verify step - test message
-                SentrySdk.CaptureMessage("Hello Sentry from PromptFunction!");
 
                 // Parse the request
                 Console.WriteLine($"[{DateTime.UtcNow:yyyy-MM-dd HH:mm:ss}] Reading request body");
@@ -120,8 +91,6 @@ namespace BookingsApi
                         ErrorMessage = "Request body is empty"
                     });
                     
-                    // Log to Sentry
-                    SentrySdk.CaptureMessage("Request body is empty", SentryLevel.Warning);
                     return emptyBodyError;
                 }
                 
@@ -143,23 +112,8 @@ namespace BookingsApi
                         ErrorMessage = $"Invalid request: Prompt is required. Received body: {requestBody}"
                     });
                     
-                    // Log to Sentry with context
-                    SentrySdk.ConfigureScope(scope =>
-                    {
-                        scope.SetExtra("request_body", requestBody);
-                    });
-                    SentrySdk.CaptureMessage("Invalid request: Prompt is required", SentryLevel.Warning);
-                    
                     return invalidRequestError;
                 }
-                
-                // Add prompt context to Sentry
-                SentrySdk.ConfigureScope(scope =>
-                {
-                    scope.SetExtra("prompt_length", promptRequest.Prompt.Length);
-                    scope.SetExtra("user_id", promptRequest.UserId ?? "anonymous");
-                    scope.SetExtra("session_id", promptRequest.SessionId ?? "no_session");
-                });
                 
                 // Use the PrimaryAgent to handle the request
                 Console.WriteLine($"[{DateTime.UtcNow:yyyy-MM-dd HH:mm:ss}] Calling PrimaryAgent.HandleAsync");
@@ -171,9 +125,6 @@ namespace BookingsApi
                     promptRequest.SessionId);
                 
                 Console.WriteLine($"[{DateTime.UtcNow:yyyy-MM-dd HH:mm:ss}] PrimaryAgent response received - Length: {agentResponse?.Length ?? 0}");
-                
-                // Log successful processing
-                SentrySdk.AddBreadcrumb("Agent response generated successfully");
                 
                 // Note: For now, we don't return detailed tool call information
                 // This could be enhanced by modifying the agent interface to return structured data
@@ -188,8 +139,7 @@ namespace BookingsApi
                     Metadata = new System.Collections.Generic.Dictionary<string, object>
                     {
                         ["agentArchitecture"] = "multi-agent",
-                        ["toolCallsMade"] = toolCalls.Count,
-                        ["sentryEnabled"] = true
+                        ["toolCallsMade"] = toolCalls.Count
                     }
                 });
 
@@ -209,15 +159,6 @@ namespace BookingsApi
                 {
                     Console.WriteLine($"[{DateTime.UtcNow:yyyy-MM-dd HH:mm:ss}] INNER EXCEPTION: {ex.InnerException.GetType().Name}: {ex.InnerException.Message}");
                 }
-                
-                // Capture exception to Sentry with full context
-                SentrySdk.ConfigureScope(scope =>
-                {
-                    scope.SetTag("error_type", ex.GetType().Name);
-                    scope.SetFingerprint(new[] { "prompt-function-error", ex.GetType().Name });
-                });
-                
-                SentrySdk.CaptureException(ex);
                 
                 // Create detailed error response with full exception information
                 var detailedErrorMessage = $"Exception Type: {ex.GetType().Name}\nMessage: {ex.Message}\nStack Trace: {ex.StackTrace}";
