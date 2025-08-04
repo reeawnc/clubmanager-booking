@@ -73,23 +73,25 @@ namespace BookingsApi
         public async Task<IActionResult> Run(
             [HttpTrigger(AuthorizationLevel.Anonymous, "post", "options", Route = "PromptFunction")] HttpRequest req)
         {
-            // Add detailed logging for debugging
-            Console.WriteLine($"[{DateTime.UtcNow:yyyy-MM-dd HH:mm:ss}] PromptFunction called - Method: {req.Method}");
-            Console.WriteLine($"[{DateTime.UtcNow:yyyy-MM-dd HH:mm:ss}] Headers: {string.Join(", ", req.Headers.Select(h => $"{h.Key}={h.Value}"))}");
-            
-            // Handle CORS preflight
-            if (req.Method == "OPTIONS")
-            {
-                Console.WriteLine($"[{DateTime.UtcNow:yyyy-MM-dd HH:mm:ss}] CORS preflight request handled");
-                var corsResponse = new OkResult();
-                req.HttpContext.Response.Headers.Add("Access-Control-Allow-Origin", "*");
-                req.HttpContext.Response.Headers.Add("Access-Control-Allow-Methods", "POST, OPTIONS");
-                req.HttpContext.Response.Headers.Add("Access-Control-Allow-Headers", "Content-Type");
-                return corsResponse;
-            }
-
             try
             {
+                // Add detailed logging for debugging
+                Console.WriteLine($"[{DateTime.UtcNow:yyyy-MM-dd HH:mm:ss}] PromptFunction called - Method: {req.Method}");
+                Console.WriteLine($"[{DateTime.UtcNow:yyyy-MM-dd HH:mm:ss}] Headers: {string.Join(", ", req.Headers.Select(h => $"{h.Key}={h.Value}"))}");
+                
+                // Handle CORS preflight
+                if (req.Method == "OPTIONS")
+                {
+                    Console.WriteLine($"[{DateTime.UtcNow:yyyy-MM-dd HH:mm:ss}] CORS preflight request handled");
+                    var corsResponse = new OkResult();
+                    req.HttpContext.Response.Headers.Add("Access-Control-Allow-Origin", "*");
+                    req.HttpContext.Response.Headers.Add("Access-Control-Allow-Methods", "POST, OPTIONS");
+                    req.HttpContext.Response.Headers.Add("Access-Control-Allow-Headers", "Content-Type");
+                    return corsResponse;
+                }
+
+                try
+                {
                 Console.WriteLine($"[{DateTime.UtcNow:yyyy-MM-dd HH:mm:ss}] Processing POST request");
                 // Add Sentry context and verify step
                 SentrySdk.ConfigureScope(scope =>
@@ -217,10 +219,17 @@ namespace BookingsApi
                 
                 SentrySdk.CaptureException(ex);
                 
+                // Create detailed error response with full exception information
+                var detailedErrorMessage = $"Exception Type: {ex.GetType().Name}\nMessage: {ex.Message}\nStack Trace: {ex.StackTrace}";
+                if (ex.InnerException != null)
+                {
+                    detailedErrorMessage += $"\nInner Exception: {ex.InnerException.GetType().Name} - {ex.InnerException.Message}";
+                }
+                
                 var errorResponse = new ObjectResult(new PromptResponse
                 {
                     Success = false,
-                    ErrorMessage = $"An error occurred: {ex.Message}"
+                    ErrorMessage = detailedErrorMessage
                 })
                 {
                     StatusCode = (int)HttpStatusCode.InternalServerError
@@ -232,6 +241,29 @@ namespace BookingsApi
                 req.HttpContext.Response.Headers.Add("Access-Control-Allow-Headers", "Content-Type");
 
                 return errorResponse;
+            }
+            }
+            catch (Exception outerEx)
+            {
+                // Catch any exceptions that might occur during function initialization or outer scope
+                Console.WriteLine($"[{DateTime.UtcNow:yyyy-MM-dd HH:mm:ss}] OUTER EXCEPTION: {outerEx.GetType().Name}: {outerEx.Message}");
+                Console.WriteLine($"[{DateTime.UtcNow:yyyy-MM-dd HH:mm:ss}] OUTER STACK TRACE: {outerEx.StackTrace}");
+                
+                var outerErrorResponse = new ObjectResult(new PromptResponse
+                {
+                    Success = false,
+                    ErrorMessage = $"Function initialization error: {outerEx.GetType().Name} - {outerEx.Message}\nStack Trace: {outerEx.StackTrace}"
+                })
+                {
+                    StatusCode = (int)HttpStatusCode.InternalServerError
+                };
+
+                // Add CORS headers to error response
+                req.HttpContext.Response.Headers.Add("Access-Control-Allow-Origin", "*");
+                req.HttpContext.Response.Headers.Add("Access-Control-Allow-Methods", "POST, OPTIONS");
+                req.HttpContext.Response.Headers.Add("Access-Control-Allow-Headers", "Content-Type");
+
+                return outerErrorResponse;
             }
         }
     }
