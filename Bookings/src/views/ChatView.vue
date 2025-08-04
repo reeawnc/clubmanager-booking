@@ -1,56 +1,23 @@
 <template>
   <div class="chat-container">
-    <!-- Header -->
-    <header class="chat-header">
-      <div class="header-content">
-        <h1 class="chat-title">Court Booking Assistant</h1>
-        <div class="header-buttons">
-          <button 
-            @click="testConnection" 
-            class="test-btn"
-            title="Test Azure Function connection"
-          >
-            Test API
-          </button>
-          <button 
-            @click="clearChat" 
-            class="clear-btn"
-            title="Clear conversation"
-          >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M3 6h18"></path>
-              <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"></path>
-              <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"></path>
-            </svg>
-          </button>
-        </div>
-      </div>
-    </header>
+    <!-- Clear button - floating in top right -->
+    <button 
+      v-if="messages.length > 0"
+      @click="clearChat" 
+      class="clear-button"
+      title="Clear conversation"
+    >
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M3 6h18"></path>
+        <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"></path>
+        <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"></path>
+      </svg>
+    </button>
 
     <!-- Messages Area -->
     <main class="messages-container" ref="messagesContainer">
-      <!-- Welcome message when no messages -->
-      <div v-if="messages.length === 0" class="welcome-section">
-        <div class="welcome-content">
-          <h2 class="welcome-title">Welcome to Court Booking Assistant</h2>
-          <p class="welcome-subtitle">Ask me about court availability, bookings, or who's playing today!</p>
-          
-          <!-- Quick action buttons -->
-          <div class="quick-actions">
-            <button 
-              v-for="action in quickActions" 
-              :key="action.id"
-              @click="sendQuickAction(action.prompt)"
-              class="quick-action-btn"
-            >
-              {{ action.label }}
-            </button>
-          </div>
-        </div>
-      </div>
-
       <!-- Chat messages -->
-      <div v-else class="messages-list">
+      <div class="messages-list">
         <ChatMessage 
           v-for="message in messages" 
           :key="message.id"
@@ -173,9 +140,22 @@ const testConnection = async () => {
 }
 
 const handleKeyDown = (event: KeyboardEvent) => {
-  if (event.key === 'Enter' && !event.shiftKey) {
-    event.preventDefault()
-    sendMessage()
+  // On mobile, allow Enter to create new lines, use Shift+Enter to send
+  // On desktop, use Enter to send, Shift+Enter for new lines
+  const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)
+  
+  if (isMobile) {
+    // Mobile: Enter = new line, Shift+Enter = send
+    if (event.key === 'Enter' && event.shiftKey) {
+      event.preventDefault()
+      sendMessage()
+    }
+  } else {
+    // Desktop: Enter = send, Shift+Enter = new line
+    if (event.key === 'Enter' && !event.shiftKey) {
+      event.preventDefault()
+      sendMessage()
+    }
   }
 }
 
@@ -204,140 +184,51 @@ onMounted(() => {
   flex-direction: column;
   height: 100vh;
   height: 100dvh; /* Use dynamic viewport height for mobile */
-  background: #1a1a1a;
-  color: #e5e5e5;
+  background: #0d1117; /* Darker like cursor theme */
+  color: #e6edf3;
 }
 
-.chat-header {
-  border-bottom: 1px solid #333;
-  padding: 1rem 1rem;
-  background: #212121;
-}
-
-@media (min-width: 640px) {
-  .chat-header {
-    padding: 1rem 2rem;
-  }
-}
-
-.header-content {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  max-width: 768px;
-  margin: 0 auto;
-}
-
-.header-buttons {
-  display: flex;
-  gap: 0.5rem;
-}
-
-.chat-title {
-  font-size: 1.125rem;
-  font-weight: 600;
-  color: #fff;
-}
-
-@media (min-width: 640px) {
-  .chat-title {
-    font-size: 1.25rem;
-  }
-}
-
-.test-btn,
-.clear-btn {
-  background: none;
-  border: 1px solid #444;
-  color: #888;
-  padding: 0.5rem;
-  border-radius: 0.375rem;
+/* Clear button - floating in top right */
+.clear-button {
+  position: fixed;
+  top: 1rem;
+  right: 1rem;
+  z-index: 100;
+  background: #21262d;
+  border: 1px solid #30363d;
+  color: #7d8590;
+  padding: 0.75rem;
+  border-radius: 50%;
   cursor: pointer;
-  transition: all 0.2s;
-  font-size: 0.875rem;
+  transition: all 0.2s ease;
+  width: 44px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  backdrop-filter: blur(8px);
 }
 
-.test-btn {
-  padding: 0.5rem 0.75rem;
+.clear-button:hover {
+  background: #30363d;
+  color: #e6edf3;
+  border-color: #58a6ff;
+  transform: translateY(-1px);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.4);
 }
 
-.test-btn:hover,
-.clear-btn:hover {
-  background: #333;
-  color: #fff;
-  border-color: #555;
+.clear-button:active {
+  transform: translateY(0);
 }
 
 .messages-container {
   flex: 1;
   overflow-y: auto;
-  padding: 0 1rem;
+  padding: 0.5rem;
 }
 
-@media (min-width: 640px) {
-  .messages-container {
-    padding: 0 2rem;
-  }
-}
-
-.welcome-section {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  height: 100%;
-  max-width: 768px;
-  margin: 0 auto;
-}
-
-.welcome-content {
-  text-align: center;
-  padding: 2rem;
-}
-
-.welcome-title {
-  font-size: 2rem;
-  font-weight: 600;
-  color: #fff;
-  margin-bottom: 0.5rem;
-}
-
-.welcome-subtitle {
-  font-size: 1.1rem;
-  color: #888;
-  margin-bottom: 2rem;
-}
-
-.quick-actions {
-  display: grid;
-  grid-template-columns: 1fr;
-  gap: 0.75rem;
-  max-width: 500px;
-  margin: 0 auto;
-}
-
-@media (min-width: 640px) {
-  .quick-actions {
-    grid-template-columns: 1fr 1fr;
-  }
-}
-
-.quick-action-btn {
-  background: #2a2a2a;
-  border: 1px solid #444;
-  color: #e5e5e5;
-  padding: 0.875rem 1.5rem;
-  border-radius: 0.5rem;
-  cursor: pointer;
-  transition: all 0.2s;
-  text-align: left;
-  font-size: 0.9rem;
-}
-
-.quick-action-btn:hover {
-  background: #333;
-  border-color: #555;
-  transform: translateY(-1px);
-}
+/* Welcome section styles removed since welcome was removed */
 
 .messages-list {
   max-width: 768px;
@@ -346,51 +237,39 @@ onMounted(() => {
 }
 
 .input-section {
-  border-top: 1px solid #333;
-  padding: 1rem 1rem;
-  background: #212121;
+  border-top: 1px solid #21262d;
+  padding: 0.75rem 0.5rem;
+  background: #161b22; /* Darker like cursor theme */
   /* Ensure input stays above mobile browser UI */
-  padding-bottom: max(1rem, env(safe-area-inset-bottom));
-}
-
-@media (min-width: 640px) {
-  .input-section {
-    padding: 1.5rem 2rem;
-  }
+  padding-bottom: max(0.75rem, env(safe-area-inset-bottom));
 }
 
 .input-container {
-  max-width: 768px;
-  margin: 0 auto;
+  width: 100%;
+  margin: 0;
 }
 
 .input-wrapper {
   display: flex;
   align-items: flex-end;
   gap: 0.5rem;
-  background: #2a2a2a;
-  border: 1px solid #444;
+  background: #21262d; /* Darker like cursor theme */
+  border: 1px solid #30363d;
   border-radius: 0.75rem;
   padding: 0.75rem;
   transition: border-color 0.2s;
   min-height: 48px; /* Ensure minimum height for mobile touch targets */
 }
 
-@media (min-width: 640px) {
-  .input-wrapper {
-    gap: 0.75rem;
-  }
-}
-
 .input-wrapper:focus-within {
-  border-color: #555;
+  border-color: #58a6ff; /* Blue accent like cursor theme */
 }
 
 .message-input {
   flex: 1;
   background: none;
   border: none;
-  color: #e5e5e5;
+  color: #e6edf3; /* Cursor theme text color */
   resize: none;
   outline: none;
   font-family: inherit;
@@ -403,7 +282,7 @@ onMounted(() => {
 }
 
 .message-input::placeholder {
-  color: #666;
+  color: #7d8590; /* Cursor theme placeholder color */
 }
 
 .send-btn {
@@ -451,15 +330,15 @@ onMounted(() => {
 }
 
 .messages-container::-webkit-scrollbar-track {
-  background: #1a1a1a;
+  background: #0d1117;
 }
 
 .messages-container::-webkit-scrollbar-thumb {
-  background: #444;
+  background: #30363d;
   border-radius: 3px;
 }
 
 .messages-container::-webkit-scrollbar-thumb:hover {
-  background: #555;
+  background: #484f58;
 }
 </style>

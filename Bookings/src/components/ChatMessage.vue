@@ -16,10 +16,6 @@
       
       <div class="message-body">
         <div class="message-text">
-          <!-- Debug: Show isLoading value -->
-          <div style="font-size: 10px; color: #666; margin-bottom: 5px;">
-            Debug: ID={{ message.id }}, isLoading={{ message.isLoading }}, contentLen={{ message.content.length }}, isUser={{ message.isUser }}
-          </div>
           <div v-if="message.isLoading" class="typing-indicator">
             <div class="typing-dots">
               <span></span>
@@ -147,8 +143,8 @@ const formatMessage = (content: string) => {
 }
 
 .assistant-avatar {
-  background: #444;
-  color: #e5e5e5;
+  background: #30363d; /* Darker cursor theme color */
+  color: #e6edf3;
 }
 
 .message-body {
@@ -157,7 +153,7 @@ const formatMessage = (content: string) => {
 }
 
 .message-text {
-  background: #2a2a2a;
+  background: #21262d; /* Darker like cursor theme */
   border-radius: 0.75rem;
   padding: 0.875rem 1.125rem;
   margin-bottom: 0.25rem;
@@ -171,8 +167,8 @@ const formatMessage = (content: string) => {
 }
 
 .assistant-message .message-text {
-  background: #2a2a2a;
-  color: #e5e5e5;
+  background: #21262d; /* Darker like cursor theme */
+  color: #e6edf3; /* Cursor theme text color */
   max-width: 100%;
 }
 
