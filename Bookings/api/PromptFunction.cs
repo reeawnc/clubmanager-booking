@@ -22,35 +22,65 @@ namespace BookingsApi
         
         public PromptFunction()
         {
-            // Initialize Sentry
-            SentrySdk.Init(options =>
+            try
             {
-                options.Dsn = "https://5b17f5890cb87b20cb1558c7854bc9ab04599786036018944.ingest.de.sentry.io/4509799";
-                options.Debug = true; // Enable in development
-                options.TracesSampleRate = 1.0; // Capture 100% of transactions for performance monitoring
-                options.Environment = Environment.GetEnvironmentVariable("AZURE_FUNCTIONS_ENVIRONMENT") ?? "Development";
+                Console.WriteLine($"[{DateTime.UtcNow:yyyy-MM-dd HH:mm:ss}] PromptFunction constructor started");
                 
-            });
+                // Initialize Sentry
+                Console.WriteLine($"[{DateTime.UtcNow:yyyy-MM-dd HH:mm:ss}] Initializing Sentry");
+                SentrySdk.Init(options =>
+                {
+                    options.Dsn = "https://5b17f5890cb87b20cb1558c7854bc9ab04599786036018944.ingest.de.sentry.io/4509799";
+                    options.Debug = true; // Enable in development
+                    options.TracesSampleRate = 1.0; // Capture 100% of transactions for performance monitoring
+                    options.Environment = Environment.GetEnvironmentVariable("AZURE_FUNCTIONS_ENVIRONMENT") ?? "Development";
+                });
 
-            // Get OpenAI API key from environment variable
-            var apiKey = Environment.GetEnvironmentVariable("OpenAI_API_Key");
-            
-            if (string.IsNullOrEmpty(apiKey))
-            {
-                throw new InvalidOperationException("OpenAI_API_Key environment variable is not set");
+                // Add some useful tags using ConfigureScope
+                SentrySdk.ConfigureScope(scope =>
+                {
+                    scope.SetTag("service", "squash-court-booking-api");
+                    scope.SetTag("version", "1.0.0");
+                });
+
+                // Get OpenAI API key from environment variable
+                Console.WriteLine($"[{DateTime.UtcNow:yyyy-MM-dd HH:mm:ss}] Getting OpenAI API key");
+                var apiKey = Environment.GetEnvironmentVariable("OpenAI_API_Key");
+                
+                if (string.IsNullOrEmpty(apiKey))
+                {
+                    Console.WriteLine($"[{DateTime.UtcNow:yyyy-MM-dd HH:mm:ss}] ERROR: OpenAI_API_Key environment variable is not set");
+                    throw new InvalidOperationException("OpenAI_API_Key environment variable is not set");
+                }
+                
+                Console.WriteLine($"[{DateTime.UtcNow:yyyy-MM-dd HH:mm:ss}] Creating OpenAIClient");
+                var openAIClient = new OpenAIClient(apiKey);
+                
+                Console.WriteLine($"[{DateTime.UtcNow:yyyy-MM-dd HH:mm:ss}] Creating PrimaryAgent");
+                _primaryAgent = new PrimaryAgent(openAIClient);
+                
+                Console.WriteLine($"[{DateTime.UtcNow:yyyy-MM-dd HH:mm:ss}] PromptFunction constructor completed successfully");
             }
-            
-            var openAIClient = new OpenAIClient(apiKey);
-            _primaryAgent = new PrimaryAgent(openAIClient);
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[{DateTime.UtcNow:yyyy-MM-dd HH:mm:ss}] CONSTRUCTOR EXCEPTION: {ex.GetType().Name}: {ex.Message}");
+                Console.WriteLine($"[{DateTime.UtcNow:yyyy-MM-dd HH:mm:ss}] CONSTRUCTOR STACK TRACE: {ex.StackTrace}");
+                throw;
+            }
         }
         
         [FunctionName("PromptFunction")]
         public async Task<IActionResult> Run(
             [HttpTrigger(AuthorizationLevel.Anonymous, "post", "options", Route = "PromptFunction")] HttpRequest req)
         {
+            // Add detailed logging for debugging
+            Console.WriteLine($"[{DateTime.UtcNow:yyyy-MM-dd HH:mm:ss}] PromptFunction called - Method: {req.Method}");
+            Console.WriteLine($"[{DateTime.UtcNow:yyyy-MM-dd HH:mm:ss}] Headers: {string.Join(", ", req.Headers.Select(h => $"{h.Key}={h.Value}"))}");
+            
             // Handle CORS preflight
             if (req.Method == "OPTIONS")
             {
+                Console.WriteLine($"[{DateTime.UtcNow:yyyy-MM-dd HH:mm:ss}] CORS preflight request handled");
                 var corsResponse = new OkResult();
                 req.HttpContext.Response.Headers.Add("Access-Control-Allow-Origin", "*");
                 req.HttpContext.Response.Headers.Add("Access-Control-Allow-Methods", "POST, OPTIONS");
@@ -60,6 +90,7 @@ namespace BookingsApi
 
             try
             {
+                Console.WriteLine($"[{DateTime.UtcNow:yyyy-MM-dd HH:mm:ss}] Processing POST request");
                 // Add Sentry context and verify step
                 SentrySdk.ConfigureScope(scope =>
                 {
@@ -73,11 +104,14 @@ namespace BookingsApi
                 SentrySdk.CaptureMessage("Hello Sentry from PromptFunction!");
 
                 // Parse the request
+                Console.WriteLine($"[{DateTime.UtcNow:yyyy-MM-dd HH:mm:ss}] Reading request body");
                 var requestBody = await new StreamReader(req.Body).ReadToEndAsync();
+                Console.WriteLine($"[{DateTime.UtcNow:yyyy-MM-dd HH:mm:ss}] Request body length: {requestBody?.Length ?? 0}");
                 
                 // Add debug logging
                 if (string.IsNullOrEmpty(requestBody))
                 {
+                    Console.WriteLine($"[{DateTime.UtcNow:yyyy-MM-dd HH:mm:ss}] ERROR: Request body is empty");
                     var emptyBodyError = new BadRequestObjectResult(new PromptResponse
                     {
                         Success = false,
@@ -89,15 +123,18 @@ namespace BookingsApi
                     return emptyBodyError;
                 }
                 
+                Console.WriteLine($"[{DateTime.UtcNow:yyyy-MM-dd HH:mm:ss}] Deserializing request body");
                 var options = new JsonSerializerOptions
                 {
                     PropertyNameCaseInsensitive = true
                 };
                 
                 var promptRequest = JsonSerializer.Deserialize<PromptRequest>(requestBody, options);
+                Console.WriteLine($"[{DateTime.UtcNow:yyyy-MM-dd HH:mm:ss}] Deserialization complete - PromptRequest: {(promptRequest != null ? "Success" : "Null")}");
                 
                 if (promptRequest == null || string.IsNullOrEmpty(promptRequest.Prompt))
                 {
+                    Console.WriteLine($"[{DateTime.UtcNow:yyyy-MM-dd HH:mm:ss}] ERROR: Invalid request - Prompt is required. Body: {requestBody}");
                     var invalidRequestError = new BadRequestObjectResult(new PromptResponse
                     {
                         Success = false,
@@ -123,10 +160,15 @@ namespace BookingsApi
                 });
                 
                 // Use the PrimaryAgent to handle the request
+                Console.WriteLine($"[{DateTime.UtcNow:yyyy-MM-dd HH:mm:ss}] Calling PrimaryAgent.HandleAsync");
+                Console.WriteLine($"[{DateTime.UtcNow:yyyy-MM-dd HH:mm:ss}] Prompt: {promptRequest.Prompt?.Substring(0, Math.Min(100, promptRequest.Prompt?.Length ?? 0))}...");
+                
                 var agentResponse = await _primaryAgent.HandleAsync(
                     promptRequest.Prompt, 
                     promptRequest.UserId, 
                     promptRequest.SessionId);
+                
+                Console.WriteLine($"[{DateTime.UtcNow:yyyy-MM-dd HH:mm:ss}] PrimaryAgent response received - Length: {agentResponse?.Length ?? 0}");
                 
                 // Log successful processing
                 SentrySdk.AddBreadcrumb("Agent response generated successfully");
@@ -158,6 +200,14 @@ namespace BookingsApi
             }
             catch (Exception ex)
             {
+                // Log detailed exception information
+                Console.WriteLine($"[{DateTime.UtcNow:yyyy-MM-dd HH:mm:ss}] EXCEPTION: {ex.GetType().Name}: {ex.Message}");
+                Console.WriteLine($"[{DateTime.UtcNow:yyyy-MM-dd HH:mm:ss}] Stack Trace: {ex.StackTrace}");
+                if (ex.InnerException != null)
+                {
+                    Console.WriteLine($"[{DateTime.UtcNow:yyyy-MM-dd HH:mm:ss}] INNER EXCEPTION: {ex.InnerException.GetType().Name}: {ex.InnerException.Message}");
+                }
+                
                 // Capture exception to Sentry with full context
                 SentrySdk.ConfigureScope(scope =>
                 {
