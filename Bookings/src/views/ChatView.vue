@@ -72,7 +72,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, nextTick, onMounted } from 'vue'
+import { ref, nextTick, onMounted, onUnmounted } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useChatStore } from '@/stores/chat'
 import ChatMessage from '@/components/ChatMessage.vue'
@@ -192,8 +192,32 @@ const scrollToBottom = async () => {
   }
 }
 
+// Handle mobile keyboard
+const handleResize = () => {
+  // Force scroll to bottom when keyboard appears/disappears
+  setTimeout(() => {
+    scrollToBottom()
+  }, 100)
+}
+
 onMounted(() => {
   messageInput.value?.focus()
+  
+  // Prevent page scrolling on mobile
+  document.body.style.overflow = 'hidden'
+  document.body.style.position = 'fixed'
+  document.body.style.width = '100%'
+  document.body.style.height = '100%'
+  
+  window.addEventListener('resize', handleResize)
+})
+
+onUnmounted(() => {
+  window.removeEventListener('resize', handleResize)
+  document.body.style.overflow = ''
+  document.body.style.position = ''
+  document.body.style.width = ''
+  document.body.style.height = ''
 })
 </script>
 
@@ -205,6 +229,12 @@ onMounted(() => {
   height: 100dvh; /* Use dynamic viewport height for mobile */
   background: #0d1117; /* Darker like cursor theme */
   color: #e6edf3;
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  overflow: hidden;
 }
 
 /* Clear button - floating in top right */
@@ -245,6 +275,8 @@ onMounted(() => {
   flex: 1;
   overflow-y: auto;
   padding: 0.5rem;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
 }
 
 /* Initial prompts styling */
@@ -327,6 +359,9 @@ onMounted(() => {
   background: #161b22; /* Darker like cursor theme */
   /* Ensure input stays above mobile browser UI */
   padding-bottom: max(0.75rem, env(safe-area-inset-bottom));
+  position: sticky;
+  bottom: 0;
+  z-index: 10;
 }
 
 .input-container {
@@ -359,11 +394,12 @@ onMounted(() => {
   outline: none;
   font-family: inherit;
   font-size: 1rem;
-  line-height: 1.5;
+  line-height: 1.4;
   max-height: 120px;
   overflow-y: auto;
   min-height: 24px;
-  padding: 0;
+  padding: 2px 0;
+  vertical-align: middle;
 }
 
 .message-input::placeholder {
@@ -415,6 +451,8 @@ onMounted(() => {
   0% { transform: rotate(0deg); }
   100% { transform: rotate(360deg); }
 }
+
+
 
 /* Scrollbar styling */
 .messages-container::-webkit-scrollbar {
