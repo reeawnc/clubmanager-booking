@@ -92,22 +92,26 @@ const quickPrompts = [
   },
   {
     id: 2,
-    text: "What time slots are available tomorrow after 5pm?"
-  },
-  {
-    id: 3,
-    text: "Book a court for 6pm this day next week, if availalbe. let me know if it's not availalbe"
-  },
-  {
-    id: 4,
-    text: "Book a court for 6:45pm this day next week, if availalbe. let me know if it's not availalbe"
-  },
-  {
-    id: 5,
     text: "Book a court for 6:45pm today"
   },
   {
+    id: 3,
+    text: "Book a court for 6:00pm today"
+  },
+  {
+    id: 4,
+    text: "What time slots are available tomorrow after 5pm?"
+  },
+  {
+    id: 5,
+    text: "Book a court for 6pm this day next week"
+  },
+  {
     id: 6,
+    text: "Book a court for 6:45pm this day next week"
+  },
+  {
+    id: 7,
     text: "What time slots are availalbe on this day next week after 5pm?"
   }
 ]
