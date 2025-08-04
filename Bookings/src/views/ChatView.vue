@@ -18,8 +18,7 @@
     <main class="messages-container" ref="messagesContainer">
       <!-- Initial prompt buttons when no messages -->
       <div v-if="messages.length === 0" class="initial-prompts">
-        <h2>Squash Court Assistant</h2>
-        <p>Choose a quick action or ask your own question:</p>
+        <h3>Squash Court Assistant</h3>
         <div class="prompt-buttons">
           <button 
             v-for="prompt in quickPrompts" 
