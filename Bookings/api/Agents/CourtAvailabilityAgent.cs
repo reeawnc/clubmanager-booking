@@ -41,7 +41,9 @@ When responding about court availability:
 - Include both available slots and current bookings
 - Be friendly and helpful in your tone
 
-You have access to tools that can fetch real-time court availability data.";
+You have access to tools that can fetch real-time court availability data.
+
+{GetCourtAvailabilityFormattingInstructions()}";
         }
 
         public CourtAvailabilityAgent(OpenAIClient openAIClient)
@@ -97,13 +99,6 @@ You have access to tools that can fetch real-time court availability data.";
                     if (toolResults.Any())
                     {
                         var followUpPrompt = $"Based on this user request: \"{prompt}\"\n\nI have gathered the following information:\n{string.Join("\n", toolResults)}\n\n";
-                        
-                        // Add court availability specific formatting instructions
-                        var hasCourtData = toolCalls.Any(tc => tc.ToolName == "get_court_availability");
-                        if (hasCourtData)
-                        {
-                            followUpPrompt += GetCourtAvailabilityFormattingInstructions();
-                        }
                         
                         followUpPrompt += "Please provide a helpful response to the user based on this information.";
                         
