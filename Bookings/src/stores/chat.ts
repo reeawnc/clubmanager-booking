@@ -41,13 +41,20 @@ export const useChatStore = defineStore('chat', () => {
   }
 
   const updateMessage = (id: string, content: string, metadata?: any) => {
-    const message = messages.value.find(m => m.id === id)
-    if (message) {
-      message.content = content
-      message.isLoading = false
-      if (metadata) {
-        message.metadata = { ...message.metadata, ...metadata }
+    console.log('updateMessage called:', { id, content: content.substring(0, 50) + '...', isLoading: false })
+    const messageIndex = messages.value.findIndex(m => m.id === id)
+    if (messageIndex !== -1) {
+      // Force Vue reactivity by creating a new message object
+      const updatedMessage = {
+        ...messages.value[messageIndex],
+        content,
+        isLoading: false,
+        metadata: metadata ? { ...messages.value[messageIndex].metadata, ...metadata } : messages.value[messageIndex].metadata
       }
+      messages.value[messageIndex] = updatedMessage
+      console.log('Message updated, isLoading set to false for message:', id)
+    } else {
+      console.error('Message not found for id:', id)
     }
   }
 
@@ -59,6 +66,7 @@ export const useChatStore = defineStore('chat', () => {
 
     // Add loading assistant message
     const assistantMessage = addMessage('', false)
+    console.log('Created assistant message with id:', assistantMessage.id, 'isLoading:', assistantMessage.isLoading)
     isLoading.value = true
 
     try {
@@ -112,6 +120,7 @@ export const useChatStore = defineStore('chat', () => {
           metadata.queryType = 'players'
         }
         
+        console.log('Updating message with response, assistantMessage.id:', assistantMessage.id)
         updateMessage(assistantMessage.id, data.response, metadata)
       } else {
         updateMessage(assistantMessage.id, `Error: ${data.errorMessage || 'Unknown error occurred'}`)
