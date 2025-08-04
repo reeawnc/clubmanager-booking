@@ -33,6 +33,7 @@ namespace BookingsApi.Tools
             RegisterTool(new GetCurrentTimeTool());
             RegisterTool(new CalculateTool());
             RegisterTool(new GetCourtAvailabilityTool());
+            RegisterTool(new BookCourtTool());
         }
     }
 }
