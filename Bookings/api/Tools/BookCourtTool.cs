@@ -46,6 +46,15 @@ namespace BookingsApi.Tools
         {
             try
             {
+                // Debug: Log all incoming parameters
+                var debugParams = new List<string>();
+                debugParams.Add("=== EXECUTE PARAMETERS ===");
+                foreach (var param in parameters)
+                {
+                    debugParams.Add($"  {param.Key}: {param.Value}");
+                }
+                debugParams.Add("=== END PARAMETERS ===\n");
+                
                 // Extract parameters
                 var date = parameters.TryGetValue("date", out var dateValue) 
                     ? dateValue?.ToString() 
@@ -59,6 +68,11 @@ namespace BookingsApi.Tools
                     ? int.Parse(durationValue?.ToString() ?? "60") 
                     : 60;
 
+                debugParams.Add($"Extracted parameters:");
+                debugParams.Add($"  Date: '{date}'");
+                debugParams.Add($"  Time: '{time}'");
+                debugParams.Add($"  Duration: {duration} minutes");
+
                 // Step 1: Get court availability to find available slots
                 var courtAvailabilityService = new CourtAvailabilityService();
                 var courtData = await courtAvailabilityService.GetCourtAvailabilityAsync(date);
@@ -66,7 +80,7 @@ namespace BookingsApi.Tools
                 // Step 2: Find the best available court and slot
                 var bookingResult = await FindAndBookBestCourt(courtData, date, time, duration);
                 
-                return bookingResult;
+                return $"{string.Join("\n", debugParams)}\n{bookingResult}";
             }
             catch (Exception ex)
             {
@@ -80,6 +94,7 @@ namespace BookingsApi.Tools
             debugInfo.Add($"=== BOOKING TOOL DEBUG ===");
             debugInfo.Add($"Looking for time: {time}");
             debugInfo.Add($"Date: {date}");
+            debugInfo.Add($"Duration: {duration} minutes");
             
             // Define court preference order (Court 1 → Court 2 → Court 3)
             var courtPreferences = new[] { "Court 1", "Court 2", "Court 3" };
@@ -91,25 +106,45 @@ namespace BookingsApi.Tools
                 var court = courtData.Courts.FirstOrDefault(c => c.ColumnHeading.StartsWith(preferredCourt));
                 if (court == null) 
                 {
-                    debugInfo.Add($"Court not found: {preferredCourt}");
+                    debugInfo.Add($"  ❌ Court not found: {preferredCourt}");
                     continue;
                 }
                 
-                debugInfo.Add($"Found court: {court.ColumnHeading}");
-                debugInfo.Add($"CourtID: {court.CourtID}");
-                debugInfo.Add($"Total cells: {court.Cells.Count}");
+                debugInfo.Add($"  ✅ Found court: {court.ColumnHeading}");
+                debugInfo.Add($"  CourtID: {court.CourtID}");
+                debugInfo.Add($"  Total cells: {court.Cells.Count}");
                 
                 // Check all slots for this court
+                debugInfo.Add($"  📋 Available slots for {preferredCourt}:");
                 foreach (var cell in court.Cells)
                 {
-                    debugInfo.Add($"  Slot: {cell.TimeSlot}");
-                    debugInfo.Add($"    Player: {cell.Player1 ?? "null"}");
-                    debugInfo.Add($"    ToolTip: {cell.ToolTip ?? "null"}");
-                    debugInfo.Add($"    Status: {cell.CssClass ?? "null"}");
-                    debugInfo.Add($"    Contains time '{time}': {cell.TimeSlot.Contains(time)}");
-                    debugInfo.Add($"    ToolTip contains 'Bookable slot': {cell.ToolTip?.Contains("Bookable slot")}");
-                    debugInfo.Add($"    ToolTip contains 'Available': {cell.ToolTip?.Contains("Available")}");
-                    debugInfo.Add($"    Player1 contains 'Book this slot': {cell.Player1?.Contains("Book this slot")}");
+                    debugInfo.Add($"    Slot: {cell.TimeSlot}");
+                    debugInfo.Add($"      Player: {cell.Player1 ?? "null"}");
+                    debugInfo.Add($"      ToolTip: {cell.ToolTip ?? "null"}");
+                    debugInfo.Add($"      Status: {cell.CssClass ?? "null"}");
+                    debugInfo.Add($"      Contains time '{time}': {cell.TimeSlot.Contains(time)}");
+                    debugInfo.Add($"      ToolTip contains 'Bookable slot': {cell.ToolTip?.Contains("Bookable slot")}");
+                    debugInfo.Add($"      ToolTip contains 'Available': {cell.ToolTip?.Contains("Available")}");
+                    debugInfo.Add($"      Player1 contains 'Book this slot': {cell.Player1?.Contains("Book this slot")}");
+                    
+                    // Check if this slot matches our criteria
+                    bool timeMatches = cell.TimeSlot.Contains(time);
+                    bool isAvailable = (cell.ToolTip?.Contains("Bookable slot") == true || 
+                                      cell.ToolTip?.Contains("Available") == true || 
+                                      cell.Player1?.Contains("Book this slot") == true);
+                    
+                    if (timeMatches && isAvailable)
+                    {
+                        debugInfo.Add($"      🎯 MATCH FOUND: {cell.TimeSlot} - Available and time matches!");
+                    }
+                    else if (timeMatches)
+                    {
+                        debugInfo.Add($"      ⚠️  Time matches but not available: {cell.TimeSlot}");
+                    }
+                    else if (isAvailable)
+                    {
+                        debugInfo.Add($"      ℹ️  Available but wrong time: {cell.TimeSlot}");
+                    }
                 }
                 
                 // Find available slot at the requested time
@@ -121,8 +156,9 @@ namespace BookingsApi.Tools
                 
                 if (availableSlot != null)
                 {
-                    debugInfo.Add($"✅ Found available slot: {availableSlot.TimeSlot}");
-                    debugInfo.Add($"CourtSlotID: {availableSlot.CourtSlotID}");
+                    debugInfo.Add($"  ✅ Found available slot: {availableSlot.TimeSlot}");
+                    debugInfo.Add($"  CourtSlotID: {availableSlot.CourtSlotID}");
+                    debugInfo.Add($"  About to book this slot...");
                     
                     // Found an available slot! Now book it
                     var bookingResult = await MakeBookingRequest(court.CourtID.ToString(), availableSlot.CourtSlotID.ToString(), date, time);
@@ -130,7 +166,7 @@ namespace BookingsApi.Tools
                 }
                 else
                 {
-                    debugInfo.Add($"❌ No available slot found for {preferredCourt} at {time}");
+                    debugInfo.Add($"  ❌ No available slot found for {preferredCourt} at {time}");
                 }
             }
             
