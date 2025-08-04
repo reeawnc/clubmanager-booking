@@ -16,6 +16,10 @@
       
       <div class="message-body">
         <div class="message-text">
+          <!-- Debug: Show isLoading value -->
+          <div style="font-size: 10px; color: #666; margin-bottom: 5px;">
+            Debug: ID={{ message.id }}, isLoading={{ message.isLoading }}, contentLen={{ message.content.length }}, isUser={{ message.isUser }}
+          </div>
           <div v-if="message.isLoading" class="typing-indicator">
             <div class="typing-dots">
               <span></span>

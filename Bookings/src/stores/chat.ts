@@ -53,6 +53,7 @@ export const useChatStore = defineStore('chat', () => {
       }
       messages.value[messageIndex] = updatedMessage
       console.log('Message updated, isLoading set to false for message:', id)
+      console.log('All messages after update:', messages.value.map(m => ({ id: m.id, isLoading: m.isLoading, contentLen: m.content.length })))
     } else {
       console.error('Message not found for id:', id)
     }
