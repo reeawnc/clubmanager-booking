@@ -18,7 +18,7 @@
     <main class="messages-container" ref="messagesContainer">
       <!-- Initial prompt buttons when no messages -->
       <div v-if="messages.length === 0" class="initial-prompts">
-        <h2>Squash Court Assistant</h2>
+        <h4>Squash Court Assistant</h4>
         <div class="prompt-buttons">
           <button 
             v-for="prompt in quickPrompts" 
@@ -262,6 +262,14 @@ onMounted(() => {
   font-weight: 600;
 }
 
+.initial-prompts h4 {
+  color: #e6edf3;
+  font-size: 1rem;
+  margin-bottom: 1rem;
+  font-weight: 500;
+  letter-spacing: 0.025em;
+}
+
 .initial-prompts p {
   color: #7d8590;
   font-size: 1.1rem;
@@ -330,7 +338,7 @@ onMounted(() => {
   background: #21262d; /* Darker like cursor theme */
   border: 1px solid #30363d;
   border-radius: 0.75rem;
-  padding: 0.75rem;
+  padding: 0.375rem;
   transition: border-color 0.2s;
   min-height: 48px; /* Ensure minimum height for mobile touch targets */
 }
@@ -351,7 +359,7 @@ onMounted(() => {
   line-height: 1.5;
   max-height: 120px;
   overflow-y: auto;
-  min-height: 20px; /* Ensure minimum height */
+  min-height: 36px; /* Increased minimum height to fill more space */
   padding: 0.25rem 0; /* Add some padding for better touch */
 }
 
