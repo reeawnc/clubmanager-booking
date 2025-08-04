@@ -17,7 +17,7 @@ namespace BookingsApi.Tools
     {
         public string Name => "book_court";
         
-        public string Description => "Book a squash court for a specific date and time. This tool will first check court availability, then book the best available court (Court 1 preferred, then Court 2, then Court 3).";
+        public string Description => "Book a squash court for a specific date and time. This tool will automatically complete the booking without requiring confirmation. It first checks court availability, then immediately books the best available court (Court 1 preferred, then Court 2, then Court 3). Use this tool when the user wants to book a court.";
         
         public Dictionary<string, object> Parameters => new()
         {
