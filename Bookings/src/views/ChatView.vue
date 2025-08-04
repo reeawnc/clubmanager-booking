@@ -61,8 +61,7 @@
             class="send-btn"
           >
             <svg v-if="!isLoading" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <line x1="22" y1="2" x2="11" y2="13"></line>
-              <polygon points="22,2 15,22 11,13 2,9 22,2"></polygon>
+              <path d="M12 19V5M5 12l7-7 7 7"></path>
             </svg>
             <div v-else class="loading-spinner"></div>
           </button>
@@ -335,23 +334,23 @@ onMounted(() => {
   display: flex;
   align-items: flex-end;
   gap: 0.5rem;
-  background: #21262d; /* Darker like cursor theme */
-  border: 1px solid #30363d;
-  border-radius: 0.75rem;
-  padding: 0.375rem;
-  transition: border-color 0.2s;
-  min-height: 48px; /* Ensure minimum height for mobile touch targets */
+  background: #2f2f2f;
+  border: 1px solid #565869;
+  border-radius: 1.5rem;
+  padding: 0.75rem;
+  transition: all 0.2s ease;
+  min-height: 48px;
 }
 
 .input-wrapper:focus-within {
-  border-color: #58a6ff; /* Blue accent like cursor theme */
+  border-color: #ffffff;
 }
 
 .message-input {
   flex: 1;
   background: none;
   border: none;
-  color: #e6edf3; /* Cursor theme text color */
+  color: #ffffff;
   resize: none;
   outline: none;
   font-family: inherit;
@@ -359,37 +358,44 @@ onMounted(() => {
   line-height: 1.5;
   max-height: 120px;
   overflow-y: auto;
-  min-height: 36px; /* Increased minimum height to fill more space */
-  padding: 0.25rem 0; /* Add some padding for better touch */
+  min-height: 24px;
+  padding: 0;
 }
 
 .message-input::placeholder {
-  color: #7d8590; /* Cursor theme placeholder color */
+  color: #8e8ea0;
 }
 
 .send-btn {
-  background: #10a37f;
+  background: #565869;
   border: none;
-  color: white;
-  padding: 0.625rem;
-  border-radius: 0.375rem;
+  color: #8e8ea0;
+  padding: 0.5rem;
+  border-radius: 50%;
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: background-color 0.2s;
-  min-width: 44px; /* Larger touch target for mobile */
-  height: 44px; /* Larger touch target for mobile */
-  flex-shrink: 0; /* Prevent button from shrinking */
+  transition: all 0.2s ease;
+  width: 32px;
+  height: 32px;
+  flex-shrink: 0;
+}
+
+.send-btn:not(:disabled) {
+  background: #ffffff;
+  color: #2f2f2f;
 }
 
 .send-btn:hover:not(:disabled) {
-  background: #0d8b6b;
+  background: #f0f0f0;
+  transform: scale(1.05);
 }
 
 .send-btn:disabled {
-  background: #444;
   cursor: not-allowed;
+  background: #565869;
+  color: #8e8ea0;
 }
 
 .loading-spinner {
