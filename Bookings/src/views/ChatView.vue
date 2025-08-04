@@ -88,23 +88,23 @@ const messagesContainer = ref<HTMLElement>()
 const quickPrompts = [
   {
     id: 1,
-    text: "🎾 Show me the court timetable for today after 5pm"
+    text: "Show me the court timetable for today after 5pm"
   },
   {
     id: 2,
-    text: "👥 Whats availalbe for today after 5pm?"
+    text: "Whats availalbe for today after 5pm?"
   },
   {
     id: 3,
-    text: "📅 Show me today's court timetable"
+    text: "Show me today's court timetable"
   },
   {
     id: 4,
-    text: "🕰️ What time slots are available tomorrow after 5pm?"
+    text: "What time slots are available tomorrow after 5pm?"
   },
   {
     id: 5,
-    text: "🏋️ Waht time slowts are availalbe to this day next week after 5pm?"
+    text: "What time slowts are availalbe to this day next week after 5pm?"
   }
 ]
 
