@@ -343,7 +343,7 @@ onMounted(() => {
 }
 
 .input-wrapper:focus-within {
-  border-color: #ffffff;
+  border-color: #8e8ea0;
 }
 
 .message-input {
