@@ -1,5 +1,6 @@
 using Azure.AI.OpenAI;
 using BookingsApi.Tools;
+using BookingsApi.Models;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -76,6 +77,7 @@ Always be helpful and provide clear information about the booking process.";
                 if (response.Choices[0].Message.ToolCalls?.Count > 0)
                 {
                     var toolResults = new List<string>();
+                    var toolCalls = new List<ToolCall>();
                     
                     foreach (var toolCall in response.Choices[0].Message.ToolCalls)
                     {
@@ -88,6 +90,14 @@ Always be helpful and provide clear information about the booking process.";
                                     functionCall.Arguments) ?? new Dictionary<string, object>();
                                 
                                 var toolResult = await tool.ExecuteAsync(parameters);
+                                
+                                toolCalls.Add(new ToolCall
+                                {
+                                    ToolName = tool.Name,
+                                    Parameters = parameters,
+                                    Result = toolResult
+                                });
+                                
                                 toolResults.Add($"{tool.Name}: {toolResult}");
                             }
                         }
@@ -100,7 +110,20 @@ Always be helpful and provide clear information about the booking process.";
                         
                         // Make final call to format the response
                         var finalResponse = await CallOpenAIAsync(followUpPrompt, new List<ChatCompletionsToolDefinition>());
-                        return finalResponse.Choices[0].Message.Content ?? "I apologize, but I couldn't process your request.";
+                        var finalResult = finalResponse.Choices[0].Message.Content ?? "I apologize, but I couldn't process your request.";
+                        
+                        // Add debug information with tool results
+                        var debugInfo = "\n\n=== DEBUG INFO ===\n";
+                        foreach (var toolCall in toolCalls)
+                        {
+                            debugInfo += $"Tool: {toolCall.ToolName}\n";
+                            debugInfo += $"Parameters: {System.Text.Json.JsonSerializer.Serialize(toolCall.Parameters)}\n";
+                            debugInfo += $"Result: {toolCall.Result}\n";
+                            debugInfo += "---\n";
+                        }
+                        debugInfo += "=== END DEBUG ===";
+                        
+                        return finalResult + debugInfo;
                     }
                 }
                 
