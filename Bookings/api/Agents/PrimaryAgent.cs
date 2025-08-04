@@ -37,21 +37,25 @@ namespace BookingsApi.Agents
             {
                 // Step 1: Try keyword-based routing first
                 var agentRole = GetAgentRoleByKeywords(prompt);
+                var routingMethod = "keywords";
                 
                 // Step 2: If no clear keyword match, use LLM routing
                 if (agentRole == null)
                 {
                     agentRole = await _routingLLM.GetAgentRoleAsync(prompt);
+                    routingMethod = "llm";
                 }
                 
                 // Step 3: Route to the appropriate agent
                 if (_agents.TryGetValue(agentRole, out var agent))
                 {
-                    return await agent.HandleAsync(prompt, userId, sessionId);
+                    var response = await agent.HandleAsync(prompt, userId, sessionId);
+                    return $"[DEBUG: {routingMethod} → {agentRole}]\n\n{response}";
                 }
                 
                 // Step 4: Fallback to court availability agent if no specific agent found
-                return await _agents["court_availability"].HandleAsync(prompt, userId, sessionId);
+                var fallbackResponse = await _agents["court_availability"].HandleAsync(prompt, userId, sessionId);
+                return $"[DEBUG: {routingMethod} → court_availability (fallback)]\n\n{fallbackResponse}";
             }
             catch (Exception ex)
             {
