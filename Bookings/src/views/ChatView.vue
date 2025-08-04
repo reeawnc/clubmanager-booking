@@ -93,11 +93,11 @@ const quickPrompts = [
   },
   {
     id: 2,
-    text: "Whats availalbe for today after 5pm?"
+    text: "Book a court for 6pm this day next week, if availalbe. let me know if it's not availalbe."
   },
   {
     id: 3,
-    text: "Show me today's court timetable"
+    text: "Book a court for 6:45pm this day next week, if availalbe. let me know if it's not availalbe."
   },
   {
     id: 4,
