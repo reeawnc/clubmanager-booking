@@ -154,17 +154,17 @@ namespace BookingsApi
   - **HH:MM - HH:MM**: Bookable slot
   - **HH:MM - HH:MM**: Bookable slot
 
-[Closing helpful statement]
-
 RULES:
 - Always use ""### Booked Slots:"" and ""### Available Slots:""
-- Always use ""- **Court X:**"" format
+- Always separate slots by court (Court 1, Court 2, Court 3) - do not mix courts together
+- Always use ""- **Court X:**"" format for court headers
 - Always use ""  - **HH:MM - HH:MM**: "" for time slots (note the 2 spaces)
 - Use ""Bookable slot"" for available times
 - Use ""Training"" for training sessions
 - Use actual player names for booked slots
 - Always include day and date in intro
-- Always add helpful closing statement
+- Each court should be listed separately with its own time slots
+- Do not combine or mix time slots from different courts
 
 ";
                         }

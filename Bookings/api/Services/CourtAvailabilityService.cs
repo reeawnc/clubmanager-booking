@@ -67,41 +67,42 @@ namespace BookingsApi.Services
                     var court1 = myDeserializedClass.Courts.FirstOrDefault(c => c.ColumnHeading.StartsWith("Court 1"));
                     var court2 = myDeserializedClass.Courts.FirstOrDefault(c => c.ColumnHeading.StartsWith("Court 2"));
                     var court3 = myDeserializedClass.Courts.FirstOrDefault(c => c.ColumnHeading.StartsWith("Court 3"));
-                    var court4 = myDeserializedClass.Courts.FirstOrDefault(c => c.ColumnHeading.StartsWith("Court 4"));
 
-                    List<Cell> cellsCombined = new List<Cell>();
+                    // Process each court separately and keep them separate
                     for (var i = 0; i < myDeserializedClass.Courts[0].Cells.Count; i++)
                     {
-                        court1.Cells[i].ToolTip = court1.Cells[i].ToolTip.Split('(')[0].Trim();
-                        court1.Cells[i].Court = "Court 1";
-                        court1.Cells[i].CourtID = court1.CourtID;                        
-                        SetPlayerNames(court1, i);
+                        if (court1 != null && i < court1.Cells.Count)
+                        {
+                            court1.Cells[i].ToolTip = court1.Cells[i].ToolTip.Split('(')[0].Trim();
+                            court1.Cells[i].Court = "Court 1";
+                            court1.Cells[i].CourtID = court1.CourtID;                        
+                            SetPlayerNames(court1, i);
+                        }
 
-                        court2.Cells[i].ToolTip = court2.Cells[i].ToolTip.Split('(')[0].Trim();
-                        court2.Cells[i].Court = "Court 2";
-                        court2.Cells[i].CourtID = court2.CourtID;
-                        SetPlayerNames(court2, i);
+                        if (court2 != null && i < court2.Cells.Count)
+                        {
+                            court2.Cells[i].ToolTip = court2.Cells[i].ToolTip.Split('(')[0].Trim();
+                            court2.Cells[i].Court = "Court 2";
+                            court2.Cells[i].CourtID = court2.CourtID;
+                            SetPlayerNames(court2, i);
+                        }
 
-                        court3.Cells[i].ToolTip = court3.Cells[i].ToolTip.Split('(')[0].Trim();
-                        court3.Cells[i].Court = "Court 3";
-                        court3.Cells[i].CourtID = court3.CourtID;
-                        SetPlayerNames(court3, i);
-
-                        cellsCombined.Add(court1.Cells[i]);
-                        cellsCombined.Add(court2.Cells[i]);
-                        cellsCombined.Add(court3.Cells[i]);
+                        if (court3 != null && i < court3.Cells.Count)
+                        {
+                            court3.Cells[i].ToolTip = court3.Cells[i].ToolTip.Split('(')[0].Trim();
+                            court3.Cells[i].Court = "Court 3";
+                            court3.Cells[i].CourtID = court3.CourtID;
+                            SetPlayerNames(court3, i);
+                        }
                     }
 
-                    var finalCourt = new Court()
-                    {
-                        Cells = cellsCombined,
-                        ColumnHeading = "All",
-                        CssClass = "",
-                        EarliestStartTime = ""
-                    };
+                    // Keep courts separate instead of combining them
+                    var separateCourts = new List<Court>();
+                    if (court1 != null) separateCourts.Add(court1);
+                    if (court2 != null) separateCourts.Add(court2);
+                    if (court3 != null) separateCourts.Add(court3);
 
-                    myDeserializedClass.Courts = new List<Court>();
-                    myDeserializedClass.Courts.Add(finalCourt);
+                    myDeserializedClass.Courts = separateCourts;
                     
                     return myDeserializedClass;
                 }

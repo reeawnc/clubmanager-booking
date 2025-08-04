@@ -46,12 +46,14 @@ namespace BookingsApi.Tools
                     Courts = courtsData.Courts.Select(court => new
                     {
                         Name = court.ColumnHeading,
+                        CourtNumber = court.ColumnHeading.Replace("Court ", ""),
                         Cells = court.Cells.Select(cell => new
                         {
                             TimeSlot = cell.TimeSlot,
                             Status = cell.CssClass,
                             Player = cell.ToolTip,
-                            IsBooked = !string.IsNullOrEmpty(cell.ToolTip) && cell.ToolTip != "Available"
+                            IsBooked = !string.IsNullOrEmpty(cell.ToolTip) && cell.ToolTip != "Available",
+                            Court = cell.Court
                         }).ToList()
                     }).ToList()
                 };
