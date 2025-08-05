@@ -84,6 +84,15 @@ namespace BookingsApi.Agents
                 return "cancellation";
             }
             
+            // Box results keywords
+            if (lowercasePrompt.Contains("box") || lowercasePrompt.Contains("league") || lowercasePrompt.Contains("results") 
+                || lowercasePrompt.Contains("statistics") || lowercasePrompt.Contains("standings") || lowercasePrompt.Contains("rankings")
+                || lowercasePrompt.Contains("player") || lowercasePrompt.Contains("match") || lowercasePrompt.Contains("score")
+                || lowercasePrompt.Contains("winner") || lowercasePrompt.Contains("loser") || lowercasePrompt.Contains("history"))
+            {
+                return "box_results";
+            }
+            
             // Court availability keywords
             if ((lowercasePrompt.Contains("court") || lowercasePrompt.Contains("courts")) 
                 && (lowercasePrompt.Contains("available") || lowercasePrompt.Contains("availability") 
@@ -119,6 +128,9 @@ namespace BookingsApi.Agents
             _agents["court_availability"] = new CourtAvailabilityAgent(_openAIClient);
             _agents["booking"] = new BookingAgent(_openAIClient);
             _agents["cancellation"] = new CancellationAgent(_openAIClient);
+            
+            // Register BoxResultsAgent - it will automatically find the file ID
+            _agents["box_results"] = new BoxResultsAgent();
             
             // Note: StatsAgent not implemented yet, but can be added here when ready
             // _agents["stats"] = new StatsAgent(_openAIClient);
