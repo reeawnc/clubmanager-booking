@@ -110,6 +110,7 @@ namespace BookingsApi
                 successResponse.Headers.Add("Content-Type", "application/json");
                 await successResponse.WriteStringAsync(JsonConvert.SerializeObject(new 
                 { 
+                    success = true,
                     message = "Box results processed and uploaded successfully",
                     filename = result.Filename,
                     blobUrl = blobUrl,
@@ -126,7 +127,7 @@ namespace BookingsApi
                 logger.LogError(ex, $"Exception in ProcessBoxResults: {ex.Message}");
                 var errorResponse = req.CreateResponse(HttpStatusCode.BadRequest);
                 errorResponse.Headers.Add("Content-Type", "application/json");
-                await errorResponse.WriteStringAsync(JsonConvert.SerializeObject(new { exception = ex.Message }));
+                await errorResponse.WriteStringAsync(JsonConvert.SerializeObject(new { success = false, errorMessage = ex.Message }));
                 return errorResponse;
             }
         }

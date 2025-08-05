@@ -93,10 +93,10 @@ namespace BookingsApi
                         emptyBodyError.Headers.Add("Access-Control-Allow-Methods", "POST, OPTIONS");
                         emptyBodyError.Headers.Add("Access-Control-Allow-Headers", "Content-Type");
                         
-                        await emptyBodyError.WriteStringAsync(JsonSerializer.Serialize(new PromptResponse
+                        await emptyBodyError.WriteStringAsync(JsonSerializer.Serialize(new
                         {
-                            Success = false,
-                            ErrorMessage = "Request body is empty"
+                            success = false,
+                            errorMessage = "Request body is empty"
                         }));
                         
                         return emptyBodyError;
@@ -120,10 +120,10 @@ namespace BookingsApi
                         invalidRequestError.Headers.Add("Access-Control-Allow-Methods", "POST, OPTIONS");
                         invalidRequestError.Headers.Add("Access-Control-Allow-Headers", "Content-Type");
                         
-                        await invalidRequestError.WriteStringAsync(JsonSerializer.Serialize(new PromptResponse
+                        await invalidRequestError.WriteStringAsync(JsonSerializer.Serialize(new
                         {
-                            Success = false,
-                            ErrorMessage = $"Invalid request: Prompt is required. Received body: {requestBody}"
+                            success = false,
+                            errorMessage = $"Invalid request: Prompt is required. Received body: {requestBody}"
                         }));
                         
                         return invalidRequestError;
@@ -150,13 +150,13 @@ namespace BookingsApi
                     successResponse.Headers.Add("Access-Control-Allow-Methods", "POST, OPTIONS");
                     successResponse.Headers.Add("Access-Control-Allow-Headers", "Content-Type");
 
-                    var responseData = new PromptResponse
+                    var responseData = new
                     {
-                        Success = true,
-                        Response = agentResponse,
-                        SessionId = promptRequest.SessionId,
-                        ToolCalls = toolCalls.Any() ? toolCalls : null,
-                        Metadata = new System.Collections.Generic.Dictionary<string, object>
+                        success = true,
+                        response = agentResponse,
+                        sessionId = promptRequest.SessionId,
+                        toolCalls = toolCalls.Any() ? toolCalls : null,
+                        metadata = new System.Collections.Generic.Dictionary<string, object>
                         {
                             ["agentArchitecture"] = "multi-agent",
                             ["toolCallsMade"] = toolCalls.Count
@@ -188,10 +188,10 @@ namespace BookingsApi
                     errorResponse.Headers.Add("Access-Control-Allow-Methods", "POST, OPTIONS");
                     errorResponse.Headers.Add("Access-Control-Allow-Headers", "Content-Type");
 
-                    await errorResponse.WriteStringAsync(JsonSerializer.Serialize(new PromptResponse
+                    await errorResponse.WriteStringAsync(JsonSerializer.Serialize(new
                     {
-                        Success = false,
-                        ErrorMessage = detailedErrorMessage
+                        success = false,
+                        errorMessage = detailedErrorMessage
                     }));
 
                     return errorResponse;
@@ -208,10 +208,10 @@ namespace BookingsApi
                 outerErrorResponse.Headers.Add("Access-Control-Allow-Methods", "POST, OPTIONS");
                 outerErrorResponse.Headers.Add("Access-Control-Allow-Headers", "Content-Type");
 
-                await outerErrorResponse.WriteStringAsync(JsonSerializer.Serialize(new PromptResponse
+                await outerErrorResponse.WriteStringAsync(JsonSerializer.Serialize(new
                 {
-                    Success = false,
-                    ErrorMessage = $"Function initialization error: {outerEx.GetType().Name} - {outerEx.Message}\nStack Trace: {outerEx.StackTrace}"
+                    success = false,
+                    errorMessage = $"Function initialization error: {outerEx.GetType().Name} - {outerEx.Message}\nStack Trace: {outerEx.StackTrace}"
                 }));
 
                 return outerErrorResponse;

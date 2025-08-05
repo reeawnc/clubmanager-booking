@@ -89,7 +89,7 @@ namespace BookingsApi
                 
                 var successResponse = req.CreateResponse(HttpStatusCode.OK);
                 successResponse.Headers.Add("Content-Type", "application/json");
-                await successResponse.WriteStringAsync(JsonConvert.SerializeObject(boxResults));
+                await successResponse.WriteStringAsync(JsonConvert.SerializeObject(new { success = true, data = boxResults }));
                 return successResponse;
             }
             catch (Exception ex)
@@ -97,7 +97,7 @@ namespace BookingsApi
                 logger.LogError(ex, $"Exception in GetBoxResults: {ex.Message}");
                 var errorResponse = req.CreateResponse(HttpStatusCode.BadRequest);
                 errorResponse.Headers.Add("Content-Type", "application/json");
-                await errorResponse.WriteStringAsync(JsonConvert.SerializeObject(new { exception = ex.Message }));
+                await errorResponse.WriteStringAsync(JsonConvert.SerializeObject(new { success = false, errorMessage = ex.Message }));
                 return errorResponse;
             }
         }

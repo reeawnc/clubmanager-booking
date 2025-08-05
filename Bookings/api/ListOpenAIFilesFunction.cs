@@ -34,6 +34,7 @@ namespace BookingsApi
                     successResponse.Headers.Add("Content-Type", "application/json");
                     await successResponse.WriteStringAsync(JsonConvert.SerializeObject(new 
                     { 
+                        success = true,
                         message = "Files retrieved successfully from OpenAI",
                         totalFiles = result.Files.Count,
                         files = result.Files
@@ -47,8 +48,9 @@ namespace BookingsApi
                     errorResponse.Headers.Add("Content-Type", "application/json");
                     await errorResponse.WriteStringAsync(JsonConvert.SerializeObject(new 
                     { 
+                        success = false,
                         message = "Failed to retrieve files from OpenAI",
-                        error = result.ErrorMessage
+                        errorMessage = result.ErrorMessage
                     }));
                     return errorResponse;
                 }
@@ -60,8 +62,9 @@ namespace BookingsApi
                 exceptionResponse.Headers.Add("Content-Type", "application/json");
                 await exceptionResponse.WriteStringAsync(JsonConvert.SerializeObject(new 
                 { 
+                    success = false,
                     message = "Exception occurred while listing files",
-                    error = ex.Message
+                    errorMessage = ex.Message
                 }));
                 return exceptionResponse;
             }

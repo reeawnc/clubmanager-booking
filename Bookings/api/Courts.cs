@@ -36,7 +36,7 @@ namespace BookingsApi
                 
                 var response = req.CreateResponse(HttpStatusCode.OK);
                 response.Headers.Add("Content-Type", "application/json");
-                await response.WriteStringAsync(JsonConvert.SerializeObject(courtData));
+                await response.WriteStringAsync(JsonConvert.SerializeObject(new { success = true, data = courtData }));
                 return response;
             }
             catch (Exception ex)
@@ -44,7 +44,7 @@ namespace BookingsApi
                 logger.LogError(ex, $"Exception in Courts: {ex.Message}");
                 var errorResponse = req.CreateResponse(HttpStatusCode.BadRequest);
                 errorResponse.Headers.Add("Content-Type", "application/json");
-                await errorResponse.WriteStringAsync(JsonConvert.SerializeObject(new { exception = ex.Message }));
+                await errorResponse.WriteStringAsync(JsonConvert.SerializeObject(new { success = false, errorMessage = ex.Message }));
                 return errorResponse;
             }
         }
