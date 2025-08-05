@@ -34,6 +34,7 @@ namespace BookingsApi.Tools
             RegisterTool(new CalculateTool());
             RegisterTool(new GetCourtAvailabilityTool());
             RegisterTool(new BookCourtTool());
+            RegisterTool(new GetBoxResultsTool());
         }
     }
 }
