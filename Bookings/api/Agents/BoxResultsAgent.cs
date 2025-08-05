@@ -63,12 +63,17 @@ namespace BookingsApi.Agents
                 // Create a thread for this conversation
                 var thread = await _assistantClient.CreateThreadAsync();
 
-                // Add the user's message to the thread
-                var messageContent = MessageContent.FromText(prompt);
+                // Add the user's message to the thread with explicit instruction to use file search
+                var enhancedPrompt = $"Please search the box results data for: {prompt}";
+                var messageContent = MessageContent.FromText(enhancedPrompt);
                 await _assistantClient.CreateMessageAsync(thread.Value.Id, MessageRole.User, [messageContent]);
 
-                // Run the assistant to process the query
-                var run = await _assistantClient.CreateRunAsync(thread.Value.Id, assistant.Id);
+                // Run the assistant to process the query with additional instructions
+                var runOptions = new RunCreationOptions()
+                {
+                    AdditionalInstructions = "Remember: You MUST use the file_search tool to search through the data before providing any answer. Always search first, then respond based on the search results."
+                };
+                var run = await _assistantClient.CreateRunAsync(thread.Value.Id, assistant.Id, runOptions);
 
                 // Wait for the run to complete
                 while (run.Value.Status == RunStatus.InProgress || run.Value.Status == RunStatus.Queued)
@@ -79,6 +84,12 @@ namespace BookingsApi.Agents
 
                 if (run.Value.Status == RunStatus.Completed)
                 {
+                    // Log if tools were used
+                    if (run.Value.Usage != null)
+                    {
+                        Console.WriteLine($"[BoxResultsAgent] Run completed with usage: {run.Value.Usage}");
+                    }
+
                     // Get the assistant's messages
                     var messages = _assistantClient.GetMessagesAsync(thread.Value.Id);
                     
@@ -90,9 +101,18 @@ namespace BookingsApi.Agents
                             // Try to get the text from the content
                             if (textContent.Text != null)
                             {
-                                return textContent.Text;
+                                // Add a prefix to indicate the search was performed
+                                return $"[SEARCHED DATA] {textContent.Text}";
                             }
                         }
+                    }
+                }
+                else
+                {
+                    Console.WriteLine($"[BoxResultsAgent] Run failed with status: {run.Value.Status}");
+                    if (!string.IsNullOrEmpty(run.Value.LastError?.Message))
+                    {
+                        Console.WriteLine($"[BoxResultsAgent] Error: {run.Value.LastError.Message}");
                     }
                 }
 #pragma warning restore OPENAI001
@@ -110,19 +130,20 @@ namespace BookingsApi.Agents
 #pragma warning restore OPENAI001
         {
 #pragma warning disable OPENAI001 // Type is for evaluation purposes only and is subject to change or removal in future updates
-            // If we already have an assistant, return it
+            // Always create a new assistant to ensure fresh instructions that force file search
+            // This ensures the assistant will always use the file_search tool
             if (!string.IsNullOrEmpty(_assistantId))
             {
                 try
                 {
-                    var existingAssistant = await _assistantClient.GetAssistantAsync(_assistantId);
-                    return existingAssistant.Value;
+                    // Delete the old assistant to force creation of new one with updated instructions
+                    await _assistantClient.DeleteAssistantAsync(_assistantId);
                 }
                 catch
                 {
-                    // Assistant might have been deleted, create a new one
-                    _assistantId = null;
+                    // Ignore deletion errors
                 }
+                _assistantId = null;
             }
 
             // Get the file ID for our box results
@@ -138,9 +159,11 @@ namespace BookingsApi.Agents
                 Name = "Box Results RAG Assistant",
                 Instructions = 
                     "You are an expert assistant for box league tennis results. " +
-                    "Use the uploaded box results data to answer questions about matches, players, statistics, and league standings. " +
+                    "IMPORTANT: You MUST ALWAYS use the file_search tool to search through the uploaded box results data before answering any question. " +
+                    "Do not respond without first searching the data using the file_search tool. " +
                     "The data contains JSON objects with information about boxes, players, scores, dates, and match results. " +
-                    "Provide helpful, accurate answers based on this data.",
+                    "Always search for the relevant information first, then provide helpful, accurate answers based on what you find in the data. " +
+                    "If no results are found after searching, then you may say that no information was found for the specific query.",
                 Tools =
                 {
                     new FileSearchToolDefinition(),
