@@ -81,7 +81,7 @@ namespace BookingsApi.Services
                 TotalMatches = totalMatches,
                 LeaguesProcessed = leaguesProcessed,
                 ProcessedLeagues = processedLeagues,
-                Filename = "summer_friendlies_all_results.jsonl"
+                Filename = "summer_friendlies_all_results.json"
             };
         }
 
@@ -89,7 +89,7 @@ namespace BookingsApi.Services
 
         private string CreateJsonLinesContent(BoxResultsRoot boxResults, BoxGroupType groupType, object leagueId)
         {
-            var sb = new StringBuilder();
+            var matches = new List<Dictionary<string, object>>();
 
             foreach (var box in boxResults.Boxes)
             {
@@ -142,14 +142,13 @@ namespace BookingsApi.Services
                             matchData["matchPlayed"] = false;
                         }
 
-                        // Convert to JSON and add to output
-                        var jsonLine = JsonConvert.SerializeObject(matchData);
-                        sb.AppendLine(jsonLine);
+                        matches.Add(matchData);
                     }
                 }
             }
 
-            return sb.ToString();
+            // Convert to valid JSON array format
+            return JsonConvert.SerializeObject(matches, Formatting.Indented);
         }
 
         private string CleanHtmlTags(string input)

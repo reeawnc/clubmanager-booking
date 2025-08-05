@@ -57,12 +57,59 @@ namespace BookingsApi
                 var blobUrl = await UploadToBlobStorage(result.Content, result.Filename, log);
 
                 log.LogInformation($"Successfully processed box results and uploaded to blob storage: {blobUrl}");
+
+                // Upload to OpenAI
+                var openAIService = new OpenAIFileUploadService();
+                
+                // First, delete any existing files with the same name
+                log.LogInformation("Checking for existing files with the same name...");
+                var existingFiles = await openAIService.ListFilesAsync(log);
+                
+                if (existingFiles.Success)
+                {
+                    var filesToDelete = existingFiles.Files
+                        .Where(f => f.Filename == result.Filename)
+                        .ToList();
+                    
+                    foreach (var file in filesToDelete)
+                    {
+                        log.LogInformation($"Deleting existing file: {file.Filename} (ID: {file.Id})");
+                        var deleteResult = await openAIService.DeleteFileAsync(file.Id!, log);
+                        if (deleteResult)
+                        {
+                            log.LogInformation($"Successfully deleted existing file: {file.Filename}");
+                        }
+                        else
+                        {
+                            log.LogWarning($"Failed to delete existing file: {file.Filename}");
+                        }
+                    }
+                }
+                else
+                {
+                    log.LogWarning($"Failed to list existing files: {existingFiles.ErrorMessage}");
+                }
+                
+                // Now upload the new file
+                var openAIResult = await openAIService.UploadFileAsync(result.Content, result.Filename, log);
+
+                if (openAIResult.Success)
+                {
+                    log.LogInformation($"Successfully uploaded file to OpenAI. File ID: {openAIResult.FileId}");
+                }
+                else
+                {
+                    log.LogWarning($"Failed to upload file to OpenAI: {openAIResult.ErrorMessage}");
+                }
                 
                 return new OkObjectResult(new 
                 { 
                     message = "Box results processed and uploaded successfully",
                     filename = result.Filename,
                     blobUrl = blobUrl,
+                    openAIFileId = openAIResult.FileId,
+                    openAISuccess = openAIResult.Success,
+                    openAIErrorMessage = openAIResult.ErrorMessage,
                     leaguesProcessed = result.LeaguesProcessed,
                     totalResults = result.TotalMatches
                 });
