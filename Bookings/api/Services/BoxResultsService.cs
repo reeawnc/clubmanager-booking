@@ -4,7 +4,7 @@ using System.Net;
 using System.Net.Http;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
-using Microsoft.AspNetCore.WebUtilities;
+using System.Text;
 using Newtonsoft.Json;
 using System.Linq;
 using BookingsApi.Models;
@@ -72,7 +72,8 @@ namespace BookingsApi.Services
                     { "siteCallback", "BoxLeagueCallback" },
                     { "action", "GetBoxLeagueResults" },
                 };
-                var url = QueryHelpers.AddQueryString(baseAddress, parameters);
+                var queryString = string.Join("&", parameters.Select(p => $"{Uri.EscapeDataString(p.Key)}={Uri.EscapeDataString(p.Value)}"));
+                var url = $"{baseAddress}?{queryString}";
                 url = url += $"&{{\"LeagueID\":{actualLeagueId},\"GroupID\":\"{(int)groupType}\"}}";
                 var newUrl = new Uri(url);
 

@@ -4,7 +4,7 @@ using System.Threading.Tasks;
 using System.Net;
 using System.Net.Http;
 using System.Text.RegularExpressions;
-using Microsoft.AspNetCore.WebUtilities;
+using System.Text;
 using Newtonsoft.Json;
 using BookingsApi.Services;
 using BookingsApi.Models;
@@ -199,7 +199,8 @@ namespace BookingsApi.Tools
                         {"action", "MakeBooking" }
                     };
 
-                    var url = QueryHelpers.AddQueryString("https://clubmanager365.com/Club/ActionHandler.ashx", param);
+                    var queryString = string.Join("&", param.Select(p => $"{Uri.EscapeDataString(p.Key)}={Uri.EscapeDataString(p.Value)}"));
+                var url = $"https://clubmanager365.com/Club/ActionHandler.ashx?{queryString}";
                     url = url + "&{\"OpponentPlayerIDs\":null,\"CourtsRequired\":[{\"c\":\"" + courtID + "\",\"s\":\"" + courtSlotID + "\"}],\"Notification\":\"-1\",\"Resources\":[],\"MatchDate\":\"" + bookingDate + "\",\"ExpectedBalanceAmount\":\"\",\"PaymentAmount\":0,\"SelectedMatchType\":\"4\",\"ExtensionCourtSlotID\":\"0\",\"CourtID\":\"" + courtID + "\",\"PackageItem1\":\"\",\"PackageItem2\":\"\",\"PackageItem3\":\"\"}";
                     
                     var uri = new Uri(url);

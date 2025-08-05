@@ -1,7 +1,5 @@
-using Microsoft.Azure.WebJobs;
-using Microsoft.Azure.WebJobs.Extensions.Http;
-using Microsoft.AspNetCore.Http;
-using Microsoft.AspNetCore.Mvc;
+using Microsoft.Azure.Functions.Worker;
+using Microsoft.Azure.Functions.Worker.Http;
 using Microsoft.Extensions.Logging;
 using Newtonsoft.Json;
 using System;
@@ -14,21 +12,24 @@ using BookingsApi.Models;
 using Azure.Storage.Blobs;
 using Azure.Storage.Blobs.Models;
 using System.Linq; // Added for .Sum()
+using System.Net;
 
 namespace BookingsApi
 {
     public static class ProcessBoxResultsFunction
     {
-        [FunctionName("ProcessBoxResults")]
-        public static async Task<IActionResult> Run(
-            [HttpTrigger(AuthorizationLevel.Function, "get", "post", Route = null)] HttpRequest req,
-            ILogger log)
+        [Function("ProcessBoxResults")]
+        public static async Task<HttpResponseData> Run(
+            [HttpTrigger(AuthorizationLevel.Function, "get", "post", Route = null)] HttpRequestData req,
+            FunctionContext context)
         {
+            var logger = context.GetLogger("ProcessBoxResults");
+            
             try
             {
-                log.LogInformation("ProcessBoxResults function processed a request.");
+                logger.LogInformation("ProcessBoxResults function processed a request.");
 
-                log.LogInformation("Processing all Summer Friendlies leagues...");
+                logger.LogInformation("Processing all Summer Friendlies leagues...");
 
                 // Initialize the processing service
                 var processService = new ProcessBoxResultsService();
@@ -39,31 +40,34 @@ namespace BookingsApi
                 {
                     if (leagueResult.Success)
                     {
-                        log.LogInformation($"Processed league {leagueResult.League}: {leagueResult.MatchCount} matches");
+                        logger.LogInformation($"Processed league {leagueResult.League}: {leagueResult.MatchCount} matches");
                     }
                     else
                     {
-                        log.LogWarning($"Failed to process league {leagueResult.League}: {leagueResult.ErrorMessage}");
+                        logger.LogWarning($"Failed to process league {leagueResult.League}: {leagueResult.ErrorMessage}");
                     }
                 }
 
                 if (string.IsNullOrEmpty(result.Content))
                 {
-                    log.LogWarning("No content generated from any leagues");
-                    return new OkObjectResult(new { message = "No box results found to process" });
+                    logger.LogWarning("No content generated from any leagues");
+                    var noContentResponse = req.CreateResponse(HttpStatusCode.OK);
+                    noContentResponse.Headers.Add("Content-Type", "application/json");
+                    await noContentResponse.WriteStringAsync(JsonConvert.SerializeObject(new { message = "No box results found to process" }));
+                    return noContentResponse;
                 }
 
                 // Upload to Azure Blob Storage
-                var blobUrl = await UploadToBlobStorage(result.Content, result.Filename, log);
+                var blobUrl = await UploadToBlobStorage(result.Content, result.Filename, logger);
 
-                log.LogInformation($"Successfully processed box results and uploaded to blob storage: {blobUrl}");
+                logger.LogInformation($"Successfully processed box results and uploaded to blob storage: {blobUrl}");
 
                 // Upload to OpenAI
                 var openAIService = new OpenAIFileUploadService();
                 
                 // First, delete any existing files with the same name
-                log.LogInformation("Checking for existing files with the same name...");
-                var existingFiles = await openAIService.ListFilesAsync(log);
+                logger.LogInformation("Checking for existing files with the same name...");
+                var existingFiles = await openAIService.ListFilesAsync(logger);
                 
                 if (existingFiles.Success)
                 {
@@ -73,36 +77,38 @@ namespace BookingsApi
                     
                     foreach (var file in filesToDelete)
                     {
-                        log.LogInformation($"Deleting existing file: {file.Filename} (ID: {file.Id})");
-                        var deleteResult = await openAIService.DeleteFileAsync(file.Id!, log);
+                        logger.LogInformation($"Deleting existing file: {file.Filename} (ID: {file.Id})");
+                        var deleteResult = await openAIService.DeleteFileAsync(file.Id!, logger);
                         if (deleteResult)
                         {
-                            log.LogInformation($"Successfully deleted existing file: {file.Filename}");
+                            logger.LogInformation($"Successfully deleted existing file: {file.Filename}");
                         }
                         else
                         {
-                            log.LogWarning($"Failed to delete existing file: {file.Filename}");
+                            logger.LogWarning($"Failed to delete existing file: {file.Filename}");
                         }
                     }
                 }
                 else
                 {
-                    log.LogWarning($"Failed to list existing files: {existingFiles.ErrorMessage}");
+                    logger.LogWarning($"Failed to list existing files: {existingFiles.ErrorMessage}");
                 }
                 
                 // Now upload the new file
-                var openAIResult = await openAIService.UploadFileAsync(result.Content, result.Filename, log);
+                var openAIResult = await openAIService.UploadFileAsync(result.Content, result.Filename, logger);
 
                 if (openAIResult.Success)
                 {
-                    log.LogInformation($"Successfully uploaded file to OpenAI. File ID: {openAIResult.FileId}");
+                    logger.LogInformation($"Successfully uploaded file to OpenAI. File ID: {openAIResult.FileId}");
                 }
                 else
                 {
-                    log.LogWarning($"Failed to upload file to OpenAI: {openAIResult.ErrorMessage}");
+                    logger.LogWarning($"Failed to upload file to OpenAI: {openAIResult.ErrorMessage}");
                 }
                 
-                return new OkObjectResult(new 
+                var successResponse = req.CreateResponse(HttpStatusCode.OK);
+                successResponse.Headers.Add("Content-Type", "application/json");
+                await successResponse.WriteStringAsync(JsonConvert.SerializeObject(new 
                 { 
                     message = "Box results processed and uploaded successfully",
                     filename = result.Filename,
@@ -112,18 +118,22 @@ namespace BookingsApi
                     openAIErrorMessage = openAIResult.ErrorMessage,
                     leaguesProcessed = result.LeaguesProcessed,
                     totalResults = result.TotalMatches
-                });
+                }));
+                return successResponse;
             }
             catch (Exception ex)
             {
-                log.LogError($"Exception in ProcessBoxResults: {ex.Message}");
-                return new BadRequestObjectResult($"exception: {ex.Message}");
+                logger.LogError(ex, $"Exception in ProcessBoxResults: {ex.Message}");
+                var errorResponse = req.CreateResponse(HttpStatusCode.BadRequest);
+                errorResponse.Headers.Add("Content-Type", "application/json");
+                await errorResponse.WriteStringAsync(JsonConvert.SerializeObject(new { exception = ex.Message }));
+                return errorResponse;
             }
         }
 
 
 
-        private static async Task<string> UploadToBlobStorage(string content, string filename, ILogger log)
+        private static async Task<string> UploadToBlobStorage(string content, string filename, ILogger logger)
         {
             try
             {
@@ -151,12 +161,12 @@ namespace BookingsApi
                     await blobClient.UploadAsync(stream, overwrite: true);
                 }
 
-                log.LogInformation($"Successfully uploaded {filename} to blob storage");
+                logger.LogInformation($"Successfully uploaded {filename} to blob storage");
                 return blobClient.Uri.ToString();
             }
             catch (Exception ex)
             {
-                log.LogError($"Failed to upload to blob storage: {ex.Message}");
+                logger.LogError(ex, $"Failed to upload to blob storage: {ex.Message}");
                 throw;
             }
         }

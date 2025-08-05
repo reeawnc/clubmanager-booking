@@ -1,7 +1,6 @@
-using Microsoft.Azure.WebJobs;
-using Microsoft.Azure.WebJobs.Extensions.Http;
-using Microsoft.AspNetCore.Http;
-using Microsoft.AspNetCore.Mvc;
+using Microsoft.Azure.Functions.Worker;
+using Microsoft.Azure.Functions.Worker.Http;
+using Microsoft.Extensions.Logging;
 using System.Net;
 using OpenAI;
 using BookingsApi.Models;
@@ -51,86 +50,107 @@ namespace BookingsApi
             }
         }
         
-        [FunctionName("PromptFunction")]
-        public async Task<IActionResult> Run(
-            [HttpTrigger(AuthorizationLevel.Anonymous, "post", "options", Route = "PromptFunction")] HttpRequest req)
+        [Function("PromptFunction")]
+        public async Task<HttpResponseData> Run(
+            [HttpTrigger(AuthorizationLevel.Anonymous, "post", "options", Route = "PromptFunction")] HttpRequestData req,
+            FunctionContext context)
         {
+            var logger = context.GetLogger("PromptFunction");
+            
             try
             {
                 // Add detailed logging for debugging
-                Console.WriteLine($"[{DateTime.UtcNow:yyyy-MM-dd HH:mm:ss}] PromptFunction called - Method: {req.Method}");
-                Console.WriteLine($"[{DateTime.UtcNow:yyyy-MM-dd HH:mm:ss}] Headers: {string.Join(", ", req.Headers.Select(h => $"{h.Key}={h.Value}"))}");
+                logger.LogInformation($"PromptFunction called - Method: {req.Method}");
+                logger.LogInformation($"Headers: {string.Join(", ", req.Headers.Select(h => $"{h.Key}={string.Join(",", h.Value)}"))}");
                 
                 // Handle CORS preflight
                 if (req.Method == "OPTIONS")
                 {
-                    Console.WriteLine($"[{DateTime.UtcNow:yyyy-MM-dd HH:mm:ss}] CORS preflight request handled");
-                    var corsResponse = new OkResult();
-                    req.HttpContext.Response.Headers.Add("Access-Control-Allow-Origin", "*");
-                    req.HttpContext.Response.Headers.Add("Access-Control-Allow-Methods", "POST, OPTIONS");
-                    req.HttpContext.Response.Headers.Add("Access-Control-Allow-Headers", "Content-Type");
+                    logger.LogInformation("CORS preflight request handled");
+                    var corsResponse = req.CreateResponse(HttpStatusCode.OK);
+                    corsResponse.Headers.Add("Access-Control-Allow-Origin", "*");
+                    corsResponse.Headers.Add("Access-Control-Allow-Methods", "POST, OPTIONS");
+                    corsResponse.Headers.Add("Access-Control-Allow-Headers", "Content-Type");
                     return corsResponse;
                 }
 
                 try
                 {
-                    Console.WriteLine($"[{DateTime.UtcNow:yyyy-MM-dd HH:mm:ss}] Processing POST request");
+                    logger.LogInformation("Processing POST request");
 
                     // Parse the request
-                    Console.WriteLine($"[{DateTime.UtcNow:yyyy-MM-dd HH:mm:ss}] Reading request body");
+                    logger.LogInformation("Reading request body");
                     var requestBody = await new StreamReader(req.Body).ReadToEndAsync();
-                    Console.WriteLine($"[{DateTime.UtcNow:yyyy-MM-dd HH:mm:ss}] Request body length: {requestBody?.Length ?? 0}");
+                    logger.LogInformation($"Request body length: {requestBody?.Length ?? 0}");
                     
                     // Add debug logging
                     if (string.IsNullOrEmpty(requestBody))
                     {
-                        Console.WriteLine($"[{DateTime.UtcNow:yyyy-MM-dd HH:mm:ss}] ERROR: Request body is empty");
-                        var emptyBodyError = new BadRequestObjectResult(new PromptResponse
+                        logger.LogError("Request body is empty");
+                        var emptyBodyError = req.CreateResponse(HttpStatusCode.BadRequest);
+                        emptyBodyError.Headers.Add("Content-Type", "application/json");
+                        emptyBodyError.Headers.Add("Access-Control-Allow-Origin", "*");
+                        emptyBodyError.Headers.Add("Access-Control-Allow-Methods", "POST, OPTIONS");
+                        emptyBodyError.Headers.Add("Access-Control-Allow-Headers", "Content-Type");
+                        
+                        await emptyBodyError.WriteStringAsync(JsonSerializer.Serialize(new PromptResponse
                         {
                             Success = false,
                             ErrorMessage = "Request body is empty"
-                        });
+                        }));
                         
                         return emptyBodyError;
                     }
                     
-                    Console.WriteLine($"[{DateTime.UtcNow:yyyy-MM-dd HH:mm:ss}] Deserializing request body");
+                    logger.LogInformation("Deserializing request body");
                     var options = new JsonSerializerOptions
                     {
                         PropertyNameCaseInsensitive = true
                     };
                     
                     var promptRequest = JsonSerializer.Deserialize<PromptRequest>(requestBody, options);
-                    Console.WriteLine($"[{DateTime.UtcNow:yyyy-MM-dd HH:mm:ss}] Deserialization complete - PromptRequest: {(promptRequest != null ? "Success" : "Null")}");
+                    logger.LogInformation($"Deserialization complete - PromptRequest: {(promptRequest != null ? "Success" : "Null")}");
                     
                     if (promptRequest == null || string.IsNullOrEmpty(promptRequest.Prompt))
                     {
-                        Console.WriteLine($"[{DateTime.UtcNow:yyyy-MM-dd HH:mm:ss}] ERROR: Invalid request - Prompt is required. Body: {requestBody}");
-                        var invalidRequestError = new BadRequestObjectResult(new PromptResponse
+                        logger.LogError($"Invalid request - Prompt is required. Body: {requestBody}");
+                        var invalidRequestError = req.CreateResponse(HttpStatusCode.BadRequest);
+                        invalidRequestError.Headers.Add("Content-Type", "application/json");
+                        invalidRequestError.Headers.Add("Access-Control-Allow-Origin", "*");
+                        invalidRequestError.Headers.Add("Access-Control-Allow-Methods", "POST, OPTIONS");
+                        invalidRequestError.Headers.Add("Access-Control-Allow-Headers", "Content-Type");
+                        
+                        await invalidRequestError.WriteStringAsync(JsonSerializer.Serialize(new PromptResponse
                         {
                             Success = false,
                             ErrorMessage = $"Invalid request: Prompt is required. Received body: {requestBody}"
-                        });
+                        }));
                         
                         return invalidRequestError;
                     }
                     
                     // Use the PrimaryAgent to handle the request
-                    Console.WriteLine($"[{DateTime.UtcNow:yyyy-MM-dd HH:mm:ss}] Calling PrimaryAgent.HandleAsync");
-                    Console.WriteLine($"[{DateTime.UtcNow:yyyy-MM-dd HH:mm:ss}] Prompt: {promptRequest.Prompt?.Substring(0, Math.Min(100, promptRequest.Prompt?.Length ?? 0))}...");
+                    logger.LogInformation("Calling PrimaryAgent.HandleAsync");
+                    logger.LogInformation($"Prompt: {promptRequest.Prompt?.Substring(0, Math.Min(100, promptRequest.Prompt?.Length ?? 0))}...");
                     
                     var agentResponse = await _primaryAgent.HandleAsync(
                         promptRequest.Prompt, 
                         promptRequest.UserId, 
                         promptRequest.SessionId);
                     
-                    Console.WriteLine($"[{DateTime.UtcNow:yyyy-MM-dd HH:mm:ss}] PrimaryAgent response received - Length: {agentResponse?.Length ?? 0}");
+                    logger.LogInformation($"PrimaryAgent response received - Length: {agentResponse?.Length ?? 0}");
                     
                     // Note: For now, we don't return detailed tool call information
                     // This could be enhanced by modifying the agent interface to return structured data
                     var toolCalls = new System.Collections.Generic.List<ToolCall>();
                     
-                    var result = new OkObjectResult(new PromptResponse
+                    var successResponse = req.CreateResponse(HttpStatusCode.OK);
+                    successResponse.Headers.Add("Content-Type", "application/json");
+                    successResponse.Headers.Add("Access-Control-Allow-Origin", "*");
+                    successResponse.Headers.Add("Access-Control-Allow-Methods", "POST, OPTIONS");
+                    successResponse.Headers.Add("Access-Control-Allow-Headers", "Content-Type");
+
+                    var responseData = new PromptResponse
                     {
                         Success = true,
                         Response = agentResponse,
@@ -141,23 +161,18 @@ namespace BookingsApi
                             ["agentArchitecture"] = "multi-agent",
                             ["toolCallsMade"] = toolCalls.Count
                         }
-                    });
+                    };
 
-                    // Add CORS headers
-                    req.HttpContext.Response.Headers.Add("Access-Control-Allow-Origin", "*");
-                    req.HttpContext.Response.Headers.Add("Access-Control-Allow-Methods", "POST, OPTIONS");
-                    req.HttpContext.Response.Headers.Add("Access-Control-Allow-Headers", "Content-Type");
-
-                    return result;
+                    await successResponse.WriteStringAsync(JsonSerializer.Serialize(responseData));
+                    return successResponse;
                 }
                 catch (Exception ex)
                 {
                     // Log detailed exception information
-                    Console.WriteLine($"[{DateTime.UtcNow:yyyy-MM-dd HH:mm:ss}] EXCEPTION: {ex.GetType().Name}: {ex.Message}");
-                    Console.WriteLine($"[{DateTime.UtcNow:yyyy-MM-dd HH:mm:ss}] Stack Trace: {ex.StackTrace}");
+                    logger.LogError(ex, $"EXCEPTION: {ex.GetType().Name}: {ex.Message}");
                     if (ex.InnerException != null)
                     {
-                        Console.WriteLine($"[{DateTime.UtcNow:yyyy-MM-dd HH:mm:ss}] INNER EXCEPTION: {ex.InnerException.GetType().Name}: {ex.InnerException.Message}");
+                        logger.LogError($"INNER EXCEPTION: {ex.InnerException.GetType().Name}: {ex.InnerException.Message}");
                     }
                     
                     // Create detailed error response with full exception information
@@ -167,19 +182,17 @@ namespace BookingsApi
                         detailedErrorMessage += $"\nInner Exception: {ex.InnerException.GetType().Name} - {ex.InnerException.Message}";
                     }
                     
-                    var errorResponse = new ObjectResult(new PromptResponse
+                    var errorResponse = req.CreateResponse(HttpStatusCode.InternalServerError);
+                    errorResponse.Headers.Add("Content-Type", "application/json");
+                    errorResponse.Headers.Add("Access-Control-Allow-Origin", "*");
+                    errorResponse.Headers.Add("Access-Control-Allow-Methods", "POST, OPTIONS");
+                    errorResponse.Headers.Add("Access-Control-Allow-Headers", "Content-Type");
+
+                    await errorResponse.WriteStringAsync(JsonSerializer.Serialize(new PromptResponse
                     {
                         Success = false,
                         ErrorMessage = detailedErrorMessage
-                    })
-                    {
-                        StatusCode = (int)HttpStatusCode.InternalServerError
-                    };
-
-                    // Add CORS headers to error response
-                    req.HttpContext.Response.Headers.Add("Access-Control-Allow-Origin", "*");
-                    req.HttpContext.Response.Headers.Add("Access-Control-Allow-Methods", "POST, OPTIONS");
-                    req.HttpContext.Response.Headers.Add("Access-Control-Allow-Headers", "Content-Type");
+                    }));
 
                     return errorResponse;
                 }
@@ -187,22 +200,19 @@ namespace BookingsApi
             catch (Exception outerEx)
             {
                 // Catch any exceptions that might occur during function initialization or outer scope
-                Console.WriteLine($"[{DateTime.UtcNow:yyyy-MM-dd HH:mm:ss}] OUTER EXCEPTION: {outerEx.GetType().Name}: {outerEx.Message}");
-                Console.WriteLine($"[{DateTime.UtcNow:yyyy-MM-dd HH:mm:ss}] OUTER STACK TRACE: {outerEx.StackTrace}");
+                logger.LogError(outerEx, $"OUTER EXCEPTION: {outerEx.GetType().Name}: {outerEx.Message}");
                 
-                var outerErrorResponse = new ObjectResult(new PromptResponse
+                var outerErrorResponse = req.CreateResponse(HttpStatusCode.InternalServerError);
+                outerErrorResponse.Headers.Add("Content-Type", "application/json");
+                outerErrorResponse.Headers.Add("Access-Control-Allow-Origin", "*");
+                outerErrorResponse.Headers.Add("Access-Control-Allow-Methods", "POST, OPTIONS");
+                outerErrorResponse.Headers.Add("Access-Control-Allow-Headers", "Content-Type");
+
+                await outerErrorResponse.WriteStringAsync(JsonSerializer.Serialize(new PromptResponse
                 {
                     Success = false,
                     ErrorMessage = $"Function initialization error: {outerEx.GetType().Name} - {outerEx.Message}\nStack Trace: {outerEx.StackTrace}"
-                })
-                {
-                    StatusCode = (int)HttpStatusCode.InternalServerError
-                };
-
-                // Add CORS headers to error response
-                req.HttpContext.Response.Headers.Add("Access-Control-Allow-Origin", "*");
-                req.HttpContext.Response.Headers.Add("Access-Control-Allow-Methods", "POST, OPTIONS");
-                req.HttpContext.Response.Headers.Add("Access-Control-Allow-Headers", "Content-Type");
+                }));
 
                 return outerErrorResponse;
             }

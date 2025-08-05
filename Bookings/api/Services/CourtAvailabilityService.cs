@@ -5,7 +5,7 @@ using System.Net;
 using System.Net.Http;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
-using Microsoft.AspNetCore.WebUtilities;
+using System.Text;
 using Microsoft.Extensions.Logging;
 using Newtonsoft.Json;
 using BookingsApi.Models;
@@ -58,7 +58,8 @@ namespace BookingsApi.Services
                         {"", "{'Date':'" + date +"','DayParts':['3'],'CourtTypes':['0'],'SpaceAvailable':1280}"} 
                     };
 
-                    var newUrl = new Uri(QueryHelpers.AddQueryString(baseAddress, param));
+                    var queryString = string.Join("&", param.Select(p => $"{Uri.EscapeDataString(p.Key)}={Uri.EscapeDataString(p.Value)}"));
+                var newUrl = new Uri($"{baseAddress}?{queryString}");
                     response = await client.GetAsync(newUrl);
                     contents = await response.Content.ReadAsStringAsync();
                     
