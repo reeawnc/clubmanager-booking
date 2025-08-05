@@ -7,13 +7,33 @@ using System.Threading.Tasks;
 using Microsoft.AspNetCore.WebUtilities;
 using Newtonsoft.Json;
 using System.Linq;
+using BookingsApi.Models;
 
 namespace BookingsApi.Services
 {
     public class BoxResultsService
     {
-        public async Task<BoxResultsRoot> GetBoxResultsAsync(int leagueId = 4076, string groupId = "216")
+        public async Task<BoxResultsRoot> GetBoxResultsAsync(BoxGroupType groupType = BoxGroupType.SummerFriendlies, object leagueId = null)
         {
+            // Determine the league ID based on group type and provided league ID
+            int actualLeagueId;
+            
+            if (leagueId != null)
+            {
+                // If a specific league ID is provided, use it
+                actualLeagueId = Convert.ToInt32(leagueId);
+            }
+            else
+            {
+                // Use default league ID based on group type
+                actualLeagueId = groupType switch
+                {
+                    BoxGroupType.SummerFriendlies => (int)SummerFriendliesLeague.JulyAug2025,
+                    BoxGroupType.Club => (int)ClubLeague.MayJune2025,
+                    _ => (int)SummerFriendliesLeague.JulyAug2025
+                };
+            }
+
             const string baseAddress = "https://clubmanager365.com/ActionHandler.ashx";
             CookieContainer cookies = new CookieContainer();
             HttpClientHandler handler = new HttpClientHandler()
@@ -53,7 +73,7 @@ namespace BookingsApi.Services
                     { "action", "GetBoxLeagueResults" },
                 };
                 var url = QueryHelpers.AddQueryString(baseAddress, parameters);
-                url = url += $"&{{\"LeagueID\":{leagueId},\"GroupID\":\"{groupId}\"}}";
+                url = url += $"&{{\"LeagueID\":{actualLeagueId},\"GroupID\":\"{(int)groupType}\"}}";
                 var newUrl = new Uri(url);
 
                 // Make the API call

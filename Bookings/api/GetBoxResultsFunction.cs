@@ -9,6 +9,7 @@ using System.Collections.Generic;
 using System.Threading.Tasks;
 using System.IO;
 using BookingsApi.Services;
+using BookingsApi.Models;
 
 namespace BookingsApi
 {
@@ -24,8 +25,8 @@ namespace BookingsApi
                 log.LogInformation("GetBoxResults function processed a request.");
 
                 // Get parameters from query string or request body
-                int leagueId = 4076; // default
-                string groupId = "216"; // default
+                object leagueId = null;
+                BoxGroupType groupType = BoxGroupType.SummerFriendlies; // default
 
                 if (req.Query.ContainsKey("leagueId"))
                 {
@@ -35,9 +36,12 @@ namespace BookingsApi
                     }
                 }
 
-                if (req.Query.ContainsKey("groupId"))
+                if (req.Query.ContainsKey("groupType"))
                 {
-                    groupId = req.Query["groupId"];
+                    if (Enum.TryParse<BoxGroupType>(req.Query["groupType"], true, out var parsedGroupType))
+                    {
+                        groupType = parsedGroupType;
+                    }
                 }
 
                 // If it's a POST request, try to get parameters from body
@@ -56,9 +60,12 @@ namespace BookingsApi
                                     leagueId = bodyLeagueId;
                                 }
                             }
-                            if (bodyParams.ContainsKey("groupId") && bodyParams["groupId"] != null)
+                            if (bodyParams.ContainsKey("groupType") && bodyParams["groupType"] != null)
                             {
-                                groupId = bodyParams["groupId"].ToString();
+                                if (Enum.TryParse<BoxGroupType>(bodyParams["groupType"].ToString(), true, out var bodyGroupType))
+                                {
+                                    groupType = bodyGroupType;
+                                }
                             }
                         }
                         catch (Exception ex)
@@ -68,11 +75,12 @@ namespace BookingsApi
                     }
                 }
 
-                log.LogInformation($"Getting box results for LeagueId: {leagueId}, GroupId: {groupId}");
+                var actualLeagueId = leagueId ?? "default";
+                log.LogInformation($"Getting box results for LeagueId: {actualLeagueId}, GroupType: {groupType}");
 
                 // Use the shared box results service
                 var boxResultsService = new BoxResultsService();
-                var boxResults = await boxResultsService.GetBoxResultsAsync(leagueId, groupId);
+                var boxResults = await boxResultsService.GetBoxResultsAsync(groupType, leagueId);
 
                 log.LogInformation($"Successfully retrieved box results with {boxResults?.Boxes?.Count ?? 0} boxes");
                 return new OkObjectResult(JsonConvert.SerializeObject(boxResults));

@@ -4,6 +4,7 @@ using System;
 using System.Linq;
 using Newtonsoft.Json;
 using BookingsApi.Services;
+using BookingsApi.Models;
 
 namespace BookingsApi.Tools
 {
@@ -21,12 +22,12 @@ namespace BookingsApi.Tools
                 ["leagueId"] = new Dictionary<string, object>
                 {
                     ["type"] = "integer",
-                    ["description"] = "League ID to get results for (default: 4076)"
+                    ["description"] = "League ID to get results for (optional - will use default based on group type if not provided)"
                 },
-                ["groupId"] = new Dictionary<string, object>
+                ["groupType"] = new Dictionary<string, object>
                 {
                     ["type"] = "string",
-                    ["description"] = "Group ID to get results for (default: '216')"
+                    ["description"] = "Group type to get results for (default: 'Club'). Options: 'Club' or 'SummerFriendlies'"
                 }
             }
         };
@@ -36,17 +37,24 @@ namespace BookingsApi.Tools
             try
             {
                 // Get parameters with defaults
-                var leagueId = parameters.TryGetValue("leagueId", out var leagueIdValue) 
-                    ? Convert.ToInt32(leagueIdValue) 
-                    : 4076;
+                object leagueId = null;
+                if (parameters.TryGetValue("leagueId", out var leagueIdValue))
+                {
+                    leagueId = Convert.ToInt32(leagueIdValue);
+                }
                 
-                var groupId = parameters.TryGetValue("groupId", out var groupIdValue) 
-                    ? groupIdValue?.ToString() 
-                    : "216";
+                var groupType = BoxGroupType.SummerFriendlies; // default
+                if (parameters.TryGetValue("groupType", out var groupTypeValue))
+                {
+                    if (Enum.TryParse<BoxGroupType>(groupTypeValue?.ToString(), true, out var parsedGroupType))
+                    {
+                        groupType = parsedGroupType;
+                    }
+                }
                 
                 // Use the shared box results service
                 var boxResultsService = new BoxResultsService();
-                var boxResults = await boxResultsService.GetBoxResultsAsync(leagueId, groupId);
+                var boxResults = await boxResultsService.GetBoxResultsAsync(groupType, leagueId);
                 
                 return JsonConvert.SerializeObject(boxResults);
             }
