@@ -1,4 +1,4 @@
-using Azure.AI.OpenAI;
+using OpenAI;
 using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;

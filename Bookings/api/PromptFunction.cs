@@ -3,7 +3,7 @@ using Microsoft.Azure.WebJobs.Extensions.Http;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using System.Net;
-using Azure.AI.OpenAI;
+using OpenAI;
 using BookingsApi.Models;
 using BookingsApi.Agents;
 using System.Text.Json;
@@ -74,115 +74,115 @@ namespace BookingsApi
 
                 try
                 {
-                Console.WriteLine($"[{DateTime.UtcNow:yyyy-MM-dd HH:mm:ss}] Processing POST request");
+                    Console.WriteLine($"[{DateTime.UtcNow:yyyy-MM-dd HH:mm:ss}] Processing POST request");
 
-                // Parse the request
-                Console.WriteLine($"[{DateTime.UtcNow:yyyy-MM-dd HH:mm:ss}] Reading request body");
-                var requestBody = await new StreamReader(req.Body).ReadToEndAsync();
-                Console.WriteLine($"[{DateTime.UtcNow:yyyy-MM-dd HH:mm:ss}] Request body length: {requestBody?.Length ?? 0}");
-                
-                // Add debug logging
-                if (string.IsNullOrEmpty(requestBody))
-                {
-                    Console.WriteLine($"[{DateTime.UtcNow:yyyy-MM-dd HH:mm:ss}] ERROR: Request body is empty");
-                    var emptyBodyError = new BadRequestObjectResult(new PromptResponse
-                    {
-                        Success = false,
-                        ErrorMessage = "Request body is empty"
-                    });
+                    // Parse the request
+                    Console.WriteLine($"[{DateTime.UtcNow:yyyy-MM-dd HH:mm:ss}] Reading request body");
+                    var requestBody = await new StreamReader(req.Body).ReadToEndAsync();
+                    Console.WriteLine($"[{DateTime.UtcNow:yyyy-MM-dd HH:mm:ss}] Request body length: {requestBody?.Length ?? 0}");
                     
-                    return emptyBodyError;
-                }
-                
-                Console.WriteLine($"[{DateTime.UtcNow:yyyy-MM-dd HH:mm:ss}] Deserializing request body");
-                var options = new JsonSerializerOptions
-                {
-                    PropertyNameCaseInsensitive = true
-                };
-                
-                var promptRequest = JsonSerializer.Deserialize<PromptRequest>(requestBody, options);
-                Console.WriteLine($"[{DateTime.UtcNow:yyyy-MM-dd HH:mm:ss}] Deserialization complete - PromptRequest: {(promptRequest != null ? "Success" : "Null")}");
-                
-                if (promptRequest == null || string.IsNullOrEmpty(promptRequest.Prompt))
-                {
-                    Console.WriteLine($"[{DateTime.UtcNow:yyyy-MM-dd HH:mm:ss}] ERROR: Invalid request - Prompt is required. Body: {requestBody}");
-                    var invalidRequestError = new BadRequestObjectResult(new PromptResponse
+                    // Add debug logging
+                    if (string.IsNullOrEmpty(requestBody))
                     {
-                        Success = false,
-                        ErrorMessage = $"Invalid request: Prompt is required. Received body: {requestBody}"
-                    });
-                    
-                    return invalidRequestError;
-                }
-                
-                // Use the PrimaryAgent to handle the request
-                Console.WriteLine($"[{DateTime.UtcNow:yyyy-MM-dd HH:mm:ss}] Calling PrimaryAgent.HandleAsync");
-                Console.WriteLine($"[{DateTime.UtcNow:yyyy-MM-dd HH:mm:ss}] Prompt: {promptRequest.Prompt?.Substring(0, Math.Min(100, promptRequest.Prompt?.Length ?? 0))}...");
-                
-                var agentResponse = await _primaryAgent.HandleAsync(
-                    promptRequest.Prompt, 
-                    promptRequest.UserId, 
-                    promptRequest.SessionId);
-                
-                Console.WriteLine($"[{DateTime.UtcNow:yyyy-MM-dd HH:mm:ss}] PrimaryAgent response received - Length: {agentResponse?.Length ?? 0}");
-                
-                // Note: For now, we don't return detailed tool call information
-                // This could be enhanced by modifying the agent interface to return structured data
-                var toolCalls = new System.Collections.Generic.List<ToolCall>();
-                
-                var result = new OkObjectResult(new PromptResponse
-                {
-                    Success = true,
-                    Response = agentResponse,
-                    SessionId = promptRequest.SessionId,
-                    ToolCalls = toolCalls.Any() ? toolCalls : null,
-                    Metadata = new System.Collections.Generic.Dictionary<string, object>
-                    {
-                        ["agentArchitecture"] = "multi-agent",
-                        ["toolCallsMade"] = toolCalls.Count
+                        Console.WriteLine($"[{DateTime.UtcNow:yyyy-MM-dd HH:mm:ss}] ERROR: Request body is empty");
+                        var emptyBodyError = new BadRequestObjectResult(new PromptResponse
+                        {
+                            Success = false,
+                            ErrorMessage = "Request body is empty"
+                        });
+                        
+                        return emptyBodyError;
                     }
-                });
+                    
+                    Console.WriteLine($"[{DateTime.UtcNow:yyyy-MM-dd HH:mm:ss}] Deserializing request body");
+                    var options = new JsonSerializerOptions
+                    {
+                        PropertyNameCaseInsensitive = true
+                    };
+                    
+                    var promptRequest = JsonSerializer.Deserialize<PromptRequest>(requestBody, options);
+                    Console.WriteLine($"[{DateTime.UtcNow:yyyy-MM-dd HH:mm:ss}] Deserialization complete - PromptRequest: {(promptRequest != null ? "Success" : "Null")}");
+                    
+                    if (promptRequest == null || string.IsNullOrEmpty(promptRequest.Prompt))
+                    {
+                        Console.WriteLine($"[{DateTime.UtcNow:yyyy-MM-dd HH:mm:ss}] ERROR: Invalid request - Prompt is required. Body: {requestBody}");
+                        var invalidRequestError = new BadRequestObjectResult(new PromptResponse
+                        {
+                            Success = false,
+                            ErrorMessage = $"Invalid request: Prompt is required. Received body: {requestBody}"
+                        });
+                        
+                        return invalidRequestError;
+                    }
+                    
+                    // Use the PrimaryAgent to handle the request
+                    Console.WriteLine($"[{DateTime.UtcNow:yyyy-MM-dd HH:mm:ss}] Calling PrimaryAgent.HandleAsync");
+                    Console.WriteLine($"[{DateTime.UtcNow:yyyy-MM-dd HH:mm:ss}] Prompt: {promptRequest.Prompt?.Substring(0, Math.Min(100, promptRequest.Prompt?.Length ?? 0))}...");
+                    
+                    var agentResponse = await _primaryAgent.HandleAsync(
+                        promptRequest.Prompt, 
+                        promptRequest.UserId, 
+                        promptRequest.SessionId);
+                    
+                    Console.WriteLine($"[{DateTime.UtcNow:yyyy-MM-dd HH:mm:ss}] PrimaryAgent response received - Length: {agentResponse?.Length ?? 0}");
+                    
+                    // Note: For now, we don't return detailed tool call information
+                    // This could be enhanced by modifying the agent interface to return structured data
+                    var toolCalls = new System.Collections.Generic.List<ToolCall>();
+                    
+                    var result = new OkObjectResult(new PromptResponse
+                    {
+                        Success = true,
+                        Response = agentResponse,
+                        SessionId = promptRequest.SessionId,
+                        ToolCalls = toolCalls.Any() ? toolCalls : null,
+                        Metadata = new System.Collections.Generic.Dictionary<string, object>
+                        {
+                            ["agentArchitecture"] = "multi-agent",
+                            ["toolCallsMade"] = toolCalls.Count
+                        }
+                    });
 
-                // Add CORS headers
-                req.HttpContext.Response.Headers.Add("Access-Control-Allow-Origin", "*");
-                req.HttpContext.Response.Headers.Add("Access-Control-Allow-Methods", "POST, OPTIONS");
-                req.HttpContext.Response.Headers.Add("Access-Control-Allow-Headers", "Content-Type");
+                    // Add CORS headers
+                    req.HttpContext.Response.Headers.Add("Access-Control-Allow-Origin", "*");
+                    req.HttpContext.Response.Headers.Add("Access-Control-Allow-Methods", "POST, OPTIONS");
+                    req.HttpContext.Response.Headers.Add("Access-Control-Allow-Headers", "Content-Type");
 
-                return result;
-            }
-            catch (Exception ex)
-            {
-                // Log detailed exception information
-                Console.WriteLine($"[{DateTime.UtcNow:yyyy-MM-dd HH:mm:ss}] EXCEPTION: {ex.GetType().Name}: {ex.Message}");
-                Console.WriteLine($"[{DateTime.UtcNow:yyyy-MM-dd HH:mm:ss}] Stack Trace: {ex.StackTrace}");
-                if (ex.InnerException != null)
-                {
-                    Console.WriteLine($"[{DateTime.UtcNow:yyyy-MM-dd HH:mm:ss}] INNER EXCEPTION: {ex.InnerException.GetType().Name}: {ex.InnerException.Message}");
+                    return result;
                 }
-                
-                // Create detailed error response with full exception information
-                var detailedErrorMessage = $"Exception Type: {ex.GetType().Name}\nMessage: {ex.Message}\nStack Trace: {ex.StackTrace}";
-                if (ex.InnerException != null)
+                catch (Exception ex)
                 {
-                    detailedErrorMessage += $"\nInner Exception: {ex.InnerException.GetType().Name} - {ex.InnerException.Message}";
+                    // Log detailed exception information
+                    Console.WriteLine($"[{DateTime.UtcNow:yyyy-MM-dd HH:mm:ss}] EXCEPTION: {ex.GetType().Name}: {ex.Message}");
+                    Console.WriteLine($"[{DateTime.UtcNow:yyyy-MM-dd HH:mm:ss}] Stack Trace: {ex.StackTrace}");
+                    if (ex.InnerException != null)
+                    {
+                        Console.WriteLine($"[{DateTime.UtcNow:yyyy-MM-dd HH:mm:ss}] INNER EXCEPTION: {ex.InnerException.GetType().Name}: {ex.InnerException.Message}");
+                    }
+                    
+                    // Create detailed error response with full exception information
+                    var detailedErrorMessage = $"Exception Type: {ex.GetType().Name}\nMessage: {ex.Message}\nStack Trace: {ex.StackTrace}";
+                    if (ex.InnerException != null)
+                    {
+                        detailedErrorMessage += $"\nInner Exception: {ex.InnerException.GetType().Name} - {ex.InnerException.Message}";
+                    }
+                    
+                    var errorResponse = new ObjectResult(new PromptResponse
+                    {
+                        Success = false,
+                        ErrorMessage = detailedErrorMessage
+                    })
+                    {
+                        StatusCode = (int)HttpStatusCode.InternalServerError
+                    };
+
+                    // Add CORS headers to error response
+                    req.HttpContext.Response.Headers.Add("Access-Control-Allow-Origin", "*");
+                    req.HttpContext.Response.Headers.Add("Access-Control-Allow-Methods", "POST, OPTIONS");
+                    req.HttpContext.Response.Headers.Add("Access-Control-Allow-Headers", "Content-Type");
+
+                    return errorResponse;
                 }
-                
-                var errorResponse = new ObjectResult(new PromptResponse
-                {
-                    Success = false,
-                    ErrorMessage = detailedErrorMessage
-                })
-                {
-                    StatusCode = (int)HttpStatusCode.InternalServerError
-                };
-
-                // Add CORS headers to error response
-                req.HttpContext.Response.Headers.Add("Access-Control-Allow-Origin", "*");
-                req.HttpContext.Response.Headers.Add("Access-Control-Allow-Methods", "POST, OPTIONS");
-                req.HttpContext.Response.Headers.Add("Access-Control-Allow-Headers", "Content-Type");
-
-                return errorResponse;
-            }
             }
             catch (Exception outerEx)
             {

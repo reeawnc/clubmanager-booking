@@ -1,5 +1,7 @@
-using Azure.AI.OpenAI;
+using OpenAI;
+using OpenAI.Chat;
 using System;
+using System.Collections.Generic;
 using System.Threading.Tasks;
 
 namespace BookingsApi.Agents
@@ -10,7 +12,7 @@ namespace BookingsApi.Agents
     /// </summary>
     public class RoutingLLM
     {
-        private readonly OpenAIClient _openAIClient;
+        private readonly ChatClient _chatClient;
         
         private const string ROUTING_SYSTEM_PROMPT = @"You are a smart prompt router for a squash court booking system. 
 Given a user request, respond with ONE of the following agent roles:
@@ -31,7 +33,7 @@ Examples:
 
         public RoutingLLM(OpenAIClient openAIClient)
         {
-            _openAIClient = openAIClient ?? throw new ArgumentNullException(nameof(openAIClient));
+            _chatClient = openAIClient?.GetChatClient("gpt-4o-mini") ?? throw new ArgumentNullException(nameof(openAIClient));
         }
 
         /// <summary>
@@ -43,18 +45,20 @@ Examples:
         {
             try
             {
-                var chatCompletionsOptions = new ChatCompletionsOptions
+                var messages = new List<ChatMessage>
                 {
-                    DeploymentName = "gpt-4o-mini",
-                    MaxTokens = 50, // Keep response short
+                    new SystemChatMessage(ROUTING_SYSTEM_PROMPT),
+                    new UserChatMessage(prompt)
+                };
+
+                var options = new ChatCompletionOptions
+                {
+                    MaxOutputTokenCount = 50, // Keep response short
                     Temperature = 0.1f // Low temperature for consistent routing
                 };
 
-                chatCompletionsOptions.Messages.Add(new ChatRequestSystemMessage(ROUTING_SYSTEM_PROMPT));
-                chatCompletionsOptions.Messages.Add(new ChatRequestUserMessage(prompt));
-
-                var response = await _openAIClient.GetChatCompletionsAsync(chatCompletionsOptions);
-                var agentRole = response.Value.Choices[0].Message.Content?.Trim().ToLowerInvariant();
+                var response = await _chatClient.CompleteChatAsync(messages, options);
+                var agentRole = response.Value.Content[0].Text?.Trim().ToLowerInvariant();
 
                 // Validate the response and provide fallback
                 return ValidateAgentRole(agentRole);

@@ -1,4 +1,6 @@
-using Azure.AI.OpenAI;
+using OpenAI;
+using OpenAI.Chat;
+using System.ClientModel;
 using BookingsApi.Tools;
 using BookingsApi.Models;
 using System;
@@ -15,7 +17,7 @@ namespace BookingsApi.Agents
     /// </summary>
     public class CourtAvailabilityAgent : IAgent
     {
-        private readonly OpenAIClient _openAIClient;
+        private readonly ChatClient _chatClient;
         private readonly ToolRegistry _toolRegistry;
 
         public string Name => "court_availability";
@@ -48,7 +50,7 @@ You have access to tools that can fetch real-time court availability data.
 
         public CourtAvailabilityAgent(OpenAIClient openAIClient)
         {
-            _openAIClient = openAIClient ?? throw new ArgumentNullException(nameof(openAIClient));
+            _chatClient = openAIClient?.GetChatClient("gpt-4o-mini") ?? throw new ArgumentNullException(nameof(openAIClient));
             _toolRegistry = new ToolRegistry();
             
             // Register only the tools this agent needs
@@ -66,20 +68,20 @@ You have access to tools that can fetch real-time court availability data.
                 var response = await CallOpenAIAsync(prompt, tools);
                 
                 // Process any tool calls
-                if (response.Choices[0].Message.ToolCalls?.Count > 0)
+                if (response.Value.ToolCalls?.Count > 0)
                 {
                     var toolResults = new List<string>();
                     var toolCalls = new List<ToolCall>();
                     
-                    foreach (var toolCall in response.Choices[0].Message.ToolCalls)
+                    foreach (var toolCall in response.Value.ToolCalls)
                     {
-                        if (toolCall is ChatCompletionsFunctionToolCall functionCall)
+                        if (toolCall is ChatToolCall functionCall)
                         {
-                            var tool = _toolRegistry.GetTool(functionCall.Name);
+                            var tool = _toolRegistry.GetTool(functionCall.FunctionName);
                             if (tool != null)
                             {
                                 var parameters = JsonSerializer.Deserialize<Dictionary<string, object>>(
-                                    functionCall.Arguments) ?? new Dictionary<string, object>();
+                                    functionCall.FunctionArguments) ?? new Dictionary<string, object>();
                                 
                                 var toolResult = await tool.ExecuteAsync(parameters);
                                 
@@ -103,12 +105,12 @@ You have access to tools that can fetch real-time court availability data.
                         followUpPrompt += "Please provide a helpful response to the user based on this information.";
                         
                         // Make final call to format the response
-                        var finalResponse = await CallOpenAIAsync(followUpPrompt, new List<ChatCompletionsToolDefinition>());
-                        return finalResponse.Choices[0].Message.Content ?? "I apologize, but I couldn't process your request.";
+                        var finalResponse = await CallOpenAIAsync(followUpPrompt, new List<ChatTool>());
+                        return finalResponse.Value.Content[0].Text ?? "I apologize, but I couldn't process your request.";
                     }
                 }
                 
-                return response.Choices[0].Message.Content ?? "I apologize, but I couldn't process your request.";
+                return response.Value.Content[0].Text ?? "I apologize, but I couldn't process your request.";
             }
             catch (Exception ex)
             {
@@ -123,18 +125,16 @@ You have access to tools that can fetch real-time court availability data.
             _toolRegistry.RegisterTool(new GetCurrentTimeTool());
         }
 
-        private List<ChatCompletionsToolDefinition> CreateOpenAITools()
+        private List<ChatTool> CreateOpenAITools()
         {
-            var tools = new List<ChatCompletionsToolDefinition>();
+            var tools = new List<ChatTool>();
             
             foreach (var tool in _toolRegistry.GetAllTools())
             {
-                var toolDefinition = new ChatCompletionsFunctionToolDefinition
-                {
-                    Name = tool.Name,
-                    Description = tool.Description,
-                    Parameters = BinaryData.FromObjectAsJson(tool.Parameters)
-                };
+                var toolDefinition = ChatTool.CreateFunctionTool(
+                    tool.Name,
+                    tool.Description,
+                    BinaryData.FromObjectAsJson(tool.Parameters));
                 
                 tools.Add(toolDefinition);
             }
@@ -142,26 +142,24 @@ You have access to tools that can fetch real-time court availability data.
             return tools;
         }
 
-        private async Task<ChatCompletions> CallOpenAIAsync(string prompt, List<ChatCompletionsToolDefinition> tools)
+        private async Task<ClientResult<ChatCompletion>> CallOpenAIAsync(string prompt, List<ChatTool> tools)
         {
-            var chatCompletionsOptions = new ChatCompletionsOptions
+            var messages = new List<ChatMessage>
             {
-                DeploymentName = "gpt-4o-mini"
+                new SystemChatMessage(GetSystemPrompt()),
+                new UserChatMessage(prompt)
             };
             
-            chatCompletionsOptions.Messages.Add(new ChatRequestSystemMessage(GetSystemPrompt()));
-            chatCompletionsOptions.Messages.Add(new ChatRequestUserMessage(prompt));
-            
+            var options = new ChatCompletionOptions();
             if (tools.Any())
             {
                 foreach (var tool in tools)
                 {
-                    chatCompletionsOptions.Tools.Add(tool);
+                    options.Tools.Add(tool);
                 }
-                chatCompletionsOptions.ToolChoice = ChatCompletionsToolChoice.Auto;
             }
             
-            return await _openAIClient.GetChatCompletionsAsync(chatCompletionsOptions);
+            return await _chatClient.CompleteChatAsync(messages, options);
         }
 
         private static string GetCourtAvailabilityFormattingInstructions()

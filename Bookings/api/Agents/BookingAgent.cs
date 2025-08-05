@@ -1,4 +1,5 @@
-using Azure.AI.OpenAI;
+using OpenAI;
+using OpenAI.Chat;
 using BookingsApi.Tools;
 using BookingsApi.Models;
 using System;
@@ -6,6 +7,8 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text.Json;
 using System.Threading.Tasks;
+using System.Net.Http;
+using System.Text;
 
 namespace BookingsApi.Agents
 {
@@ -15,7 +18,7 @@ namespace BookingsApi.Agents
     /// </summary>
     public class BookingAgent : IAgent
     {
-        private readonly OpenAIClient _openAIClient;
+        private readonly ChatClient _chatClient;
         private readonly ToolRegistry _toolRegistry;
 
         public string Name => "booking";
@@ -61,7 +64,7 @@ Always be helpful and provide clear information about the booking process.";
 
         public BookingAgent(OpenAIClient openAIClient)
         {
-            _openAIClient = openAIClient ?? throw new ArgumentNullException(nameof(openAIClient));
+            _chatClient = openAIClient?.GetChatClient("gpt-4o-mini") ?? throw new ArgumentNullException(nameof(openAIClient));
             _toolRegistry = new ToolRegistry();
             
             // Register tools this agent needs
@@ -75,24 +78,40 @@ Always be helpful and provide clear information about the booking process.";
                 // Create tools for this agent
                 var tools = CreateOpenAITools();
                 
+                // Create chat messages
+                var messages = new List<ChatMessage>
+                {
+                    new SystemChatMessage(GetSystemPrompt()),
+                    new UserChatMessage(prompt)
+                };
+                
                 // Initial call to OpenAI with tools
-                var response = await CallOpenAIAsync(prompt, tools);
+                var options = new ChatCompletionOptions();
+                if (tools.Any())
+                {
+                    foreach (var tool in tools)
+                    {
+                        options.Tools.Add(tool);
+                    }
+                }
+                
+                var response = await _chatClient.CompleteChatAsync(messages, options);
                 
                 // Process any tool calls
-                if (response.Choices[0].Message.ToolCalls?.Count > 0)
+                if (response.Value.ToolCalls?.Count > 0)
                 {
                     var toolResults = new List<string>();
                     var toolCalls = new List<ToolCall>();
                     
-                    foreach (var toolCall in response.Choices[0].Message.ToolCalls)
+                    foreach (var toolCall in response.Value.ToolCalls)
                     {
-                        if (toolCall is ChatCompletionsFunctionToolCall functionCall)
+                        if (toolCall is ChatToolCall functionCall)
                         {
-                            var tool = _toolRegistry.GetTool(functionCall.Name);
+                            var tool = _toolRegistry.GetTool(functionCall.FunctionName);
                             if (tool != null)
                             {
                                 var parameters = JsonSerializer.Deserialize<Dictionary<string, object>>(
-                                    functionCall.Arguments) ?? new Dictionary<string, object>();
+                                    functionCall.FunctionArguments) ?? new Dictionary<string, object>();
                                 
                                 var toolResult = await tool.ExecuteAsync(parameters);
                                 
@@ -114,8 +133,14 @@ Always be helpful and provide clear information about the booking process.";
                         var followUpPrompt = $"Based on this user request: \"{prompt}\"\n\nI have gathered the following information:\n{string.Join("\n", toolResults)}\n\nPlease provide a helpful response to the user based on this information.";
                         
                         // Make final call to format the response
-                        var finalResponse = await CallOpenAIAsync(followUpPrompt, new List<ChatCompletionsToolDefinition>());
-                        var finalResult = finalResponse.Choices[0].Message.Content ?? "I apologize, but I couldn't process your request.";
+                        var finalMessages = new List<ChatMessage>
+                        {
+                            new SystemChatMessage(GetSystemPrompt()),
+                            new UserChatMessage(followUpPrompt)
+                        };
+                        
+                        var finalResponse = await _chatClient.CompleteChatAsync(finalMessages);
+                        var finalResult = finalResponse.Value.Content[0].Text ?? "I apologize, but I couldn't process your request.";
                         
                         // Add debug information with tool results
                         var debugInfo = "\n\n=== DEBUG INFO ===\n";
@@ -132,7 +157,7 @@ Always be helpful and provide clear information about the booking process.";
                     }
                 }
                 
-                return response.Choices[0].Message.Content ?? "I apologize, but I couldn't process your request.";
+                return response.Value.Content[0].Text ?? "I apologize, but I couldn't process your request.";
             }
             catch (Exception ex)
             {
@@ -147,45 +172,21 @@ Always be helpful and provide clear information about the booking process.";
             _toolRegistry.RegisterTool(new BookCourtTool());
         }
 
-        private List<ChatCompletionsToolDefinition> CreateOpenAITools()
+        private List<ChatTool> CreateOpenAITools()
         {
-            var tools = new List<ChatCompletionsToolDefinition>();
+            var tools = new List<ChatTool>();
             
             foreach (var tool in _toolRegistry.GetAllTools())
             {
-                var toolDefinition = new ChatCompletionsFunctionToolDefinition
-                {
-                    Name = tool.Name,
-                    Description = tool.Description,
-                    Parameters = BinaryData.FromObjectAsJson(tool.Parameters)
-                };
+                var toolDefinition = ChatTool.CreateFunctionTool(
+                    tool.Name,
+                    tool.Description,
+                    BinaryData.FromObjectAsJson(tool.Parameters));
                 
                 tools.Add(toolDefinition);
             }
             
             return tools;
-        }
-
-        private async Task<ChatCompletions> CallOpenAIAsync(string prompt, List<ChatCompletionsToolDefinition> tools)
-        {
-            var chatCompletionsOptions = new ChatCompletionsOptions
-            {
-                DeploymentName = "gpt-4o-mini"
-            };
-            
-            chatCompletionsOptions.Messages.Add(new ChatRequestSystemMessage(GetSystemPrompt()));
-            chatCompletionsOptions.Messages.Add(new ChatRequestUserMessage(prompt));
-            
-            if (tools.Any())
-            {
-                foreach (var tool in tools)
-                {
-                    chatCompletionsOptions.Tools.Add(tool);
-                }
-                chatCompletionsOptions.ToolChoice = ChatCompletionsToolChoice.Auto;
-            }
-            
-            return await _openAIClient.GetChatCompletionsAsync(chatCompletionsOptions);
         }
     }
 }

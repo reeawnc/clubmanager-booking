@@ -1,6 +1,8 @@
-using Azure.AI.OpenAI;
+using OpenAI;
+using OpenAI.Chat;
 using BookingsApi.Tools;
 using System;
+using System.Collections.Generic;
 using System.Threading.Tasks;
 
 namespace BookingsApi.Agents
@@ -11,7 +13,7 @@ namespace BookingsApi.Agents
     /// </summary>
     public class CancellationAgent : IAgent
     {
-        private readonly OpenAIClient _openAIClient;
+        private readonly ChatClient _chatClient;
 
         public string Name => "cancellation";
         public string Description => "Handles booking cancellation and modification requests";
@@ -35,23 +37,21 @@ In the future, you will have access to tools that can:
 
         public CancellationAgent(OpenAIClient openAIClient)
         {
-            _openAIClient = openAIClient ?? throw new ArgumentNullException(nameof(openAIClient));
+            _chatClient = openAIClient?.GetChatClient("gpt-4o-mini") ?? throw new ArgumentNullException(nameof(openAIClient));
         }
 
         public async Task<string> HandleAsync(string prompt, string? userId = null, string? sessionId = null)
         {
             try
             {
-                var chatCompletionsOptions = new ChatCompletionsOptions
+                var messages = new List<ChatMessage>
                 {
-                    DeploymentName = "gpt-4o-mini"
+                    new SystemChatMessage(SYSTEM_PROMPT),
+                    new UserChatMessage(prompt)
                 };
 
-                chatCompletionsOptions.Messages.Add(new ChatRequestSystemMessage(SYSTEM_PROMPT));
-                chatCompletionsOptions.Messages.Add(new ChatRequestUserMessage(prompt));
-
-                var response = await _openAIClient.GetChatCompletionsAsync(chatCompletionsOptions);
-                return response.Value.Choices[0].Message.Content ?? "I apologize, but I couldn't process your cancellation request at this time.";
+                var response = await _chatClient.CompleteChatAsync(messages);
+                return response.Value.Content[0].Text ?? "I apologize, but I couldn't process your cancellation request at this time.";
             }
             catch (Exception ex)
             {

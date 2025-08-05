@@ -1,4 +1,4 @@
-using Azure.AI.OpenAI;
+using OpenAI;
 using BookingsApi.Tools;
 using BookingsApi.Models;
 using BookingsApi.Services;
