@@ -96,7 +96,7 @@ const quickPrompts = [
   },
   {
     id: 3,
-    text: "Who's playing next?"
+    text: "Who as won the most boxes in A1?"
   },
   {
     id: 4,

@@ -1,4 +1,6 @@
 using OpenAI;
+using OpenAI.Chat;
+using OpenAI.Assistants;
 using BookingsApi.Tools;
 using BookingsApi.Models;
 using BookingsApi.Services;
@@ -21,10 +23,12 @@ namespace BookingsApi.Agents
     /// </summary>
     public class BoxResultsAgent : IAgent
     {
-        private string? _fileId;
         private readonly string _apiKey;
-        private readonly HttpClient _httpClient;
+#pragma warning disable OPENAI001 // Type is for evaluation purposes only and is subject to change or removal in future updates
+        private readonly AssistantClient _assistantClient;
+#pragma warning restore OPENAI001
         private readonly OpenAIFileUploadService _openAIService;
+        private string? _assistantId;
 
         public string Name => "box_results";
         public string Description => "Handles queries about box league results, player statistics, match history, and league standings";
@@ -37,8 +41,10 @@ namespace BookingsApi.Agents
                 throw new InvalidOperationException("OpenAI_API_Key environment variable is not configured");
             }
             
-            _httpClient = new HttpClient();
-            _httpClient.DefaultRequestHeaders.Add("Authorization", $"Bearer {_apiKey}");
+            var openAIClient = new OpenAIClient(_apiKey);
+#pragma warning disable OPENAI001 // Type is for evaluation purposes only and is subject to change or removal in future updates
+            _assistantClient = openAIClient.GetAssistantClient();
+#pragma warning restore OPENAI001
             _openAIService = new OpenAIFileUploadService();
         }
 
@@ -46,70 +52,52 @@ namespace BookingsApi.Agents
         {
             try
             {
-                // Get or find the file ID for summer_friendlies_all_results.json
-                var fileId = await GetOrFindFileId();
-                if (string.IsNullOrEmpty(fileId))
+#pragma warning disable OPENAI001 // Type is for evaluation purposes only and is subject to change or removal in future updates
+                // Get or create the assistant with file search capabilities
+                var assistant = await GetOrCreateAssistant();
+                if (assistant == null)
                 {
-                    return "I'm sorry, but I couldn't find the box results data file. Please ensure the data has been uploaded first.";
+                    return "I'm sorry, but I couldn't set up the box results assistant. Please ensure the data has been uploaded first.";
                 }
 
-                // Use OpenAI's responses API with file search
-                var requestBody = new
-                {
-                    model = "gpt-4o-mini",
-                    input = prompt,
-                    tools = new[]
-                    {
-                        new
-                        {
-                            type = "file_search",
-                            file_ids = new[] { fileId }
-                        }
-                    }
-                };
+                // Create a thread for this conversation
+                var thread = await _assistantClient.CreateThreadAsync();
 
-                var jsonContent = JsonSerializer.Serialize(requestBody);
-                var content = new StringContent(jsonContent, Encoding.UTF8, "application/json");
+                // Add the user's message to the thread
+                var messageContent = MessageContent.FromText(prompt);
+                await _assistantClient.CreateMessageAsync(thread.Value.Id, MessageRole.User, [messageContent]);
 
-                var response = await _httpClient.PostAsync("https://api.openai.com/v1/responses", content);
-                
-                if (response.IsSuccessStatusCode)
+                // Run the assistant to process the query
+                var run = await _assistantClient.CreateRunAsync(thread.Value.Id, assistant.Id);
+
+                // Wait for the run to complete
+                while (run.Value.Status == RunStatus.InProgress || run.Value.Status == RunStatus.Queued)
                 {
-                    var responseContent = await response.Content.ReadAsStringAsync();
-                    var apiResponse = JsonSerializer.Deserialize<OpenAIResponseResult>(responseContent);
+                    await Task.Delay(1000); // Wait 1 second before checking again
+                    run = await _assistantClient.GetRunAsync(thread.Value.Id, run.Value.Id);
+                }
+
+                if (run.Value.Status == RunStatus.Completed)
+                {
+                    // Get the assistant's messages
+                    var messages = _assistantClient.GetMessagesAsync(thread.Value.Id);
                     
-                    if (apiResponse?.OutputItems != null && apiResponse.OutputItems.Count > 0)
+                    // Find the latest assistant message
+                    await foreach (var message in messages)
                     {
-                        var results = new List<string>();
-                        
-                        foreach (var item in apiResponse.OutputItems)
+                        if (message.Role == MessageRole.Assistant && message.Content?.FirstOrDefault() is var textContent && textContent != null)
                         {
-                            // Look for message items which contain the actual response
-                            if (item.Type == "message" && item.Content != null)
+                            // Try to get the text from the content
+                            if (textContent.Text != null)
                             {
-                                foreach (var contentItem in item.Content)
-                                {
-                                    if (contentItem.Type == "text" && !string.IsNullOrEmpty(contentItem.Text))
-                                    {
-                                        results.Add(contentItem.Text);
-                                    }
-                                }
+                                return textContent.Text;
                             }
                         }
-                        
-                        if (results.Any())
-                        {
-                            return string.Join("\n\n", results);
-                        }
                     }
-                    
-                    return "No relevant results found for your query.";
                 }
-                else
-                {
-                    var errorContent = await response.Content.ReadAsStringAsync();
-                    return $"Error querying file: {response.StatusCode} - {errorContent}";
-                }
+#pragma warning restore OPENAI001
+
+                return "I apologize, but I couldn't generate a response for your query. Please try rephrasing your question.";
             }
             catch (Exception ex)
             {
@@ -117,14 +105,66 @@ namespace BookingsApi.Agents
             }
         }
 
-        private async Task<string?> GetOrFindFileId()
+#pragma warning disable OPENAI001 // Type is for evaluation purposes only and is subject to change or removal in future updates
+        private async Task<Assistant?> GetOrCreateAssistant()
+#pragma warning restore OPENAI001
         {
-            // If we already have a file ID, use it
-            if (!string.IsNullOrEmpty(_fileId))
+#pragma warning disable OPENAI001 // Type is for evaluation purposes only and is subject to change or removal in future updates
+            // If we already have an assistant, return it
+            if (!string.IsNullOrEmpty(_assistantId))
             {
-                return _fileId;
+                try
+                {
+                    var existingAssistant = await _assistantClient.GetAssistantAsync(_assistantId);
+                    return existingAssistant.Value;
+                }
+                catch
+                {
+                    // Assistant might have been deleted, create a new one
+                    _assistantId = null;
+                }
             }
 
+            // Get the file ID for our box results
+            var fileId = await GetFileId();
+            if (string.IsNullOrEmpty(fileId))
+            {
+                return null;
+            }
+
+            // Create assistant options following the official documentation pattern
+            AssistantCreationOptions assistantOptions = new()
+            {
+                Name = "Box Results RAG Assistant",
+                Instructions = 
+                    "You are an expert assistant for box league tennis results. " +
+                    "Use the uploaded box results data to answer questions about matches, players, statistics, and league standings. " +
+                    "The data contains JSON objects with information about boxes, players, scores, dates, and match results. " +
+                    "Provide helpful, accurate answers based on this data.",
+                Tools =
+                {
+                    new FileSearchToolDefinition(),
+                },
+                ToolResources = new()
+                {
+                    FileSearch = new()
+                    {
+                        NewVectorStores =
+                        {
+                            new VectorStoreCreationHelper([fileId]),
+                        }
+                    }
+                },
+            };
+
+            var assistant = await _assistantClient.CreateAssistantAsync("gpt-4o-mini", assistantOptions);
+            _assistantId = assistant.Value.Id;
+            return assistant.Value;
+#pragma warning restore OPENAI001
+        }
+
+        private async Task<string?> GetFileId()
+        {
             try
             {
                 // Create a mock logger for the service call
@@ -141,8 +181,7 @@ namespace BookingsApi.Agents
                     
                     if (targetFile != null && !string.IsNullOrEmpty(targetFile.Id))
                     {
-                        _fileId = targetFile.Id; // Cache it for future use
-                        return _fileId;
+                        return targetFile.Id;
                     }
                 }
                 
@@ -162,33 +201,7 @@ namespace BookingsApi.Agents
             public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter) { }
         }
 
-        // Response models for OpenAI responses API
-        public class OpenAIResponseResult
-        {
-            [JsonPropertyName("output_items")]
-            public List<OutputItem> OutputItems { get; set; } = new List<OutputItem>();
-        }
 
-        public class OutputItem
-        {
-            [JsonPropertyName("type")]
-            public string Type { get; set; } = string.Empty;
-            
-            [JsonPropertyName("role")]
-            public string? Role { get; set; }
-            
-            [JsonPropertyName("content")]
-            public List<ContentItem>? Content { get; set; }
-        }
-
-        public class ContentItem
-        {
-            [JsonPropertyName("type")]
-            public string Type { get; set; } = string.Empty;
-            
-            [JsonPropertyName("text")]
-            public string? Text { get; set; }
-        }
 
 
     }
