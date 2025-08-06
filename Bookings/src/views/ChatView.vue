@@ -121,6 +121,10 @@ const quickPrompts = [
   {
     id: 9,
     text: `Give me a summary of the Box league results for Manolo Demery ${new Date().getFullYear()}`
+  },
+  {
+    id: 10,
+    text: `Compare the Box League Results for R Cunniffe and Manolo Demery in ${new Date().getFullYear()} in the Main Group`
   }
 ]
 
