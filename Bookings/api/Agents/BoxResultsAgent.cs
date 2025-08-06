@@ -65,31 +65,45 @@ namespace BookingsApi.Agents
                     return "I'm sorry, but I couldn't set up the box results assistant. Please ensure the data has been uploaded first.";
                 }
 
-                // Create a thread for this conversation
-                var thread = await _assistantClient.CreateThreadAsync();
+                // Create a thread for this conversation with file search enabled
+                var threadOptions = new ThreadCreationOptions()
+                {
+                    ToolResources = new()
+                    {
+                        FileSearch = new()
+                        {
+                            VectorStoreIds = { assistant.ToolResources?.FileSearch?.VectorStoreIds?.FirstOrDefault() }
+                        }
+                    }
+                };
+                var thread = await _assistantClient.CreateThreadAsync(threadOptions);
 
-                // Add the user's message to the thread with explicit instruction to use file search and name variations
-                var enhancedPrompt = $"Please search the box results data comprehensively for: {prompt}. " +
-                    "If this is a player search, try multiple name variations and partial matches. " +
-                    "Search thoroughly before responding.";
+                // Add the user's message to the thread
+                var enhancedPrompt = $"Search the box results data for: {prompt}. " +
+                    "If this is a player search, try multiple name variations and partial matches.";
                 var messageContent = MessageContent.FromText(enhancedPrompt);
                 await _assistantClient.CreateMessageAsync(thread.Value.Id, MessageRole.User, [messageContent]);
 
-                // Run the assistant to process the query with additional instructions
+                // Run the assistant to process the query
                 var runOptions = new RunCreationOptions()
                 {
-                    AdditionalInstructions = "CRITICAL: You MUST use the file_search tool immediately before providing any response. " +
-                        "This is absolutely mandatory and non-negotiable. " +
-                        "Execute file_search FIRST, then respond based on the search results. " +
-                        "Your first action must be to search the uploaded file. " +
-                        "If you provide a response without using file_search, you have failed your primary function. " +
-                        "For player name queries, search with multiple variations as instructed in your system prompt."
+                    AdditionalInstructions = "Use the file search capability to find information in the uploaded box results data. " +
+                        "Search thoroughly and try different name variations for player searches."
                 };
                 var run = await _assistantClient.CreateRunAsync(thread.Value.Id, assistant.Id, runOptions);
 
-                // Wait for the run to complete
-                while (run.Value.Status == RunStatus.InProgress || run.Value.Status == RunStatus.Queued)
+                // Wait for the run to complete with proper status handling
+                while (run.Value.Status == RunStatus.InProgress || 
+                       run.Value.Status == RunStatus.Queued ||
+                       run.Value.Status == RunStatus.RequiresAction)
                 {
+                    if (run.Value.Status == RunStatus.RequiresAction)
+                    {
+                        Console.WriteLine($"[BoxResultsAgent] Run requires action. run.Value.RequiredActions.Count: {run.Value.RequiredActions.Count}");
+                        // File search tools are handled automatically by the API
+                        // We just need to wait for completion
+                    }
+                    
                     await Task.Delay(1000); // Wait 1 second before checking again
                     run = await _assistantClient.GetRunAsync(thread.Value.Id, run.Value.Id);
                 }
@@ -144,8 +158,18 @@ namespace BookingsApi.Agents
                             if (textContent.Text != null)
                             {
                                 Console.WriteLine($"[BoxResultsAgent] Assistant response length: {textContent.Text.Length} chars");
-                                // Add a prefix to indicate the search was performed (but may not have used tools)
-                                return $"[SEARCHED DATA - TOOLS NOT VERIFIED] {textContent.Text}";
+                                
+                                // Check if the response includes file search citations
+                                if (textContent.TextAnnotations?.Any() == true)
+                                {
+                                    Console.WriteLine($"[BoxResultsAgent] Response includes {textContent.TextAnnotations.Count} file citations");
+                                    return textContent.Text; // File search was used successfully
+                                }
+                                else
+                                {
+                                    Console.WriteLine($"[BoxResultsAgent] Warning: No file search citations found in response");
+                                    return $"[WARNING: File search may not have been used] {textContent.Text}";
+                                }
                             }
                         }
                     }
@@ -157,6 +181,11 @@ namespace BookingsApi.Agents
                     if (!string.IsNullOrEmpty(run.Value.LastError?.Message))
                     {
                         Console.WriteLine($"[BoxResultsAgent] Error: {run.Value.LastError.Message}");
+                        return $"I encountered an error while searching the data: {run.Value.LastError.Message}";
+                    }
+                    else
+                    {
+                        return $"I'm sorry, but the search operation did not complete successfully. Status: {run.Value.Status}";
                     }
                 }
 #pragma warning restore OPENAI001
@@ -197,38 +226,38 @@ namespace BookingsApi.Agents
                 return null;
             }
 
-            // Step 1: Use VectorStoreCreationHelper (this approach should work)
             Console.WriteLine($"[BoxResultsAgent] Creating assistant with vector store for file: {fileId}");
+            
+            // Create vector store with the file
+            var vectorStore = await _vectorStoreClient.CreateVectorStoreAsync(true, new VectorStoreCreationOptions()
+            {
+                Name = "Box Results Data Store",
+                FileIds = { fileId },
+                ExpirationPolicy = new VectorStoreExpirationPolicy(VectorStoreExpirationAnchor.LastActiveAt, 7),
+            });
+
+            Console.WriteLine($"[BoxResultsAgent] Created vector store: {vectorStore.Value.Id}");
+
+            // Create assistant with file search capabilities
             AssistantCreationOptions assistantOptions = new()
             {
                 Name = "Box Results RAG Assistant",
                 Instructions = 
                     "You are an expert assistant for box league tennis results. " +
-                    "CRITICAL REQUIREMENT: You MUST use the file_search tool first before answering ANY question. This is mandatory. " +
-                    "NEVER respond without first using file_search. The file_search tool is your primary source of information. " +
-                    "STEP 1: Always call file_search tool with your query " +
-                    "STEP 2: Only after getting file_search results, then provide your answer " +
-                    "The uploaded file contains JSON data with box league results including player names, scores, dates, and match information. " +
-                    "For player name searches: " +
-                    "- Use file_search multiple times with name variations (full name, surname only, initials) " +
-                    "- Example: For 'R Cunniffe' search: 'R Cunniffe', then 'Cunniffe', then 'Rioghan Cunniffe' " +
-                    "- The data has 'player1' and 'player2' fields that contain player names " +
-                    "DO NOT make up information. Only use data from file_search results. " +
-                    "If file_search returns no results after trying variations, then say no data was found.",
-                Tools =
-                {
-                    new FileSearchToolDefinition(),
-                },
+                    "You have access to uploaded box league data through file search capabilities. " +
+                    "Always search the files thoroughly before answering questions about players, matches, or results. " +
+                    "For player name searches, try multiple name variations (full name, surname only, partial matches). " +
+                    "The data contains JSON with 'player1' and 'player2' fields, match dates, scores, and league information. " +
+                    "Only provide information that you can find in the uploaded files. " +
+                    "If you cannot find specific information after searching, clearly state that no data was found.",
+                Tools = { new FileSearchToolDefinition() },
                 ToolResources = new()
                 {
                     FileSearch = new()
                     {
-                        NewVectorStores =
-                        {
-                            new VectorStoreCreationHelper([fileId])
-                        }
+                        VectorStoreIds = { vectorStore.Value.Id }
                     }
-                },
+                }
             };
 
             var assistant = await _assistantClient.CreateAssistantAsync("gpt-4o", assistantOptions);
