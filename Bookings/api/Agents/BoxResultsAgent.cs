@@ -245,7 +245,7 @@ namespace BookingsApi.Agents
                     FileIds = { fileId },
                     ExpirationPolicy = new VectorStoreExpirationPolicy(VectorStoreExpirationAnchor.LastActiveAt, 30),
                 })).Value;
-            }                
+            }
 
             Console.WriteLine($"[BoxResultsAgent] Created vector store: {vectorStore.Id}");
 
@@ -253,7 +253,7 @@ namespace BookingsApi.Agents
             AssistantCreationOptions assistantOptions = new()
             {
                 Name = "Box Results RAG Assistant",
-                Instructions = 
+                Instructions =
                     "You are an expert assistant for box league tennis results. " +
                     "You have access to uploaded box league data through file search capabilities. " +
                     "Always search the files thoroughly before answering questions about players, matches, or results. " +
@@ -271,27 +271,39 @@ namespace BookingsApi.Agents
                 }
             };
 
-            var assistant = await _assistantClient.CreateAssistantAsync(ASSISTANT_MODEL, assistantOptions);
-            _assistantId = assistant.Value.Id;
-            
-            Console.WriteLine($"[BoxResultsAgent] Created assistant: {assistant.Value.Id}");
-            Console.WriteLine($"[BoxResultsAgent] Assistant name: {assistant.Value.Name}");
-            Console.WriteLine($"[BoxResultsAgent] Assistant tools count: {assistant.Value.Tools?.Count ?? 0}");
-            Console.WriteLine($"[BoxResultsAgent] File ID used: {fileId}");
-            if (assistant.Value.Tools != null)
+            Assistant assistant = null;
+            //todo load the assistant from a file in azure blob storage if it exists
+
+            var res = await _assistantClient.GetAssistantAsync("");
+            if (res.Value != null)
             {
-                foreach (var tool in assistant.Value.Tools)
+                assistant = res.Value;
+            }
+            else 
+            {
+                assistant = await _assistantClient.CreateAssistantAsync(ASSISTANT_MODEL, assistantOptions);
+                //todo, save this id in a file in azure blob storage for future use. extract this logic to a new class
+            }
+            _assistantId = assistant.Id;
+
+            Console.WriteLine($"[BoxResultsAgent] Created assistant: {assistant.Id}");
+            Console.WriteLine($"[BoxResultsAgent] Assistant name: {assistant.Name}");
+            Console.WriteLine($"[BoxResultsAgent] Assistant tools count: {assistant.Tools?.Count ?? 0}");
+            Console.WriteLine($"[BoxResultsAgent] File ID used: {fileId}");
+            if (assistant.Tools != null)
+            {
+                foreach (var tool in assistant.Tools)
                 {
                     Console.WriteLine($"[BoxResultsAgent] Tool: {tool}");
                 }
             }
             
-            if (assistant.Value.ToolResources?.FileSearch?.VectorStoreIds != null)
+            if (assistant.ToolResources?.FileSearch?.VectorStoreIds != null)
             {
-                Console.WriteLine($"[BoxResultsAgent] Vector stores attached: {string.Join(", ", assistant.Value.ToolResources.FileSearch.VectorStoreIds)}");
+                Console.WriteLine($"[BoxResultsAgent] Vector stores attached: {string.Join(", ", assistant.ToolResources.FileSearch.VectorStoreIds)}");
             }
             
-            return assistant.Value;
+            return assistant;
 #pragma warning restore OPENAI001
         }
 
