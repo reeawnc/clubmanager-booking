@@ -256,13 +256,16 @@ namespace BookingsApi.Agents
             {
                 Name = "Box Results RAG Assistant",
                 Instructions =
-                    "You are an expert assistant for box league tennis results. " +
+                    "You are an expert assistant for box league squash results. " +
                     "You have access to uploaded box league data through file search capabilities. " +
                     "Always search the files thoroughly before answering questions about players, matches, or results. " +
                     "For player name searches, try multiple name variations (full name, surname only, partial matches). " +
                     "The data contains JSON with 'player1' and 'player2' fields, match dates, scores, and league information. " +
                     "Only provide information that you can find in the uploaded files. " +
                     "If you cannot find specific information after searching, clearly state that no data was found.",
+                    $"Ensure to search based on data also. This year is {DateTime.Now.Year}.",
+                    "Don't include unplayable matches in the results, unless the user asks for them.",
+                    $"Ensure you search based on the Main Group unless the user asks for something else. For example, relevant matches in {BoxGroupType.SummerFriendlies} and {SummerFriendliesLeague.JulyAug2025} represent the latest and current box league data."
                 Tools = { new FileSearchToolDefinition() },
                 ToolResources = new()
                 {
