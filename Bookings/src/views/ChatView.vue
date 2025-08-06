@@ -116,11 +116,11 @@ const quickPrompts = [
   },
   {
     id: 8,
-    text: "Give me a summary of the Box league results for R Cunniffe this year"
+    text: `Give me a summary of the Box league results for R Cunniffe ${new Date().getFullYear()}`
   },
   {
     id: 9,
-    text: "Give me a summary of the Box league results for Manolo Demery this year"
+    text: `Give me a summary of the Box league results for Manolo Demery ${new Date().getFullYear()}`
   }
 ]
 
