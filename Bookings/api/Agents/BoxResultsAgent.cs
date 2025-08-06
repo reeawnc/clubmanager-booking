@@ -26,7 +26,7 @@ namespace BookingsApi.Agents
     /// </summary>
     public class BoxResultsAgent : IAgent
     {
-        private const string ASSISTANT_MODEL = "gpt-4.1-nano";
+        private const string ASSISTANT_MODEL = "gpt-4o-mini";
         
         private readonly string _apiKey;
 #pragma warning disable OPENAI001 // Type is for evaluation purposes only and is subject to change or removal in future updates
@@ -243,7 +243,7 @@ namespace BookingsApi.Agents
                 {
                     Name = "Box Results Data Store",
                     FileIds = { fileId },
-                    ExpirationPolicy = new VectorStoreExpirationPolicy(VectorStoreExpirationAnchor.LastActiveAt, 7),
+                    ExpirationPolicy = new VectorStoreExpirationPolicy(VectorStoreExpirationAnchor.LastActiveAt, 30),
                 })).Value;
             }                
 
