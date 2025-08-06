@@ -229,16 +229,25 @@ namespace BookingsApi.Agents
             }
 
             Console.WriteLine($"[BoxResultsAgent] Creating assistant with vector store for file: {fileId}");
-            
-            // Create vector store with the file
-            var vectorStore = await _vectorStoreClient.CreateVectorStoreAsync(true, new VectorStoreCreationOptions()
-            {
-                Name = "Box Results Data Store",
-                FileIds = { fileId },
-                ExpirationPolicy = new VectorStoreExpirationPolicy(VectorStoreExpirationAnchor.LastActiveAt, 7),
-            });
 
-            Console.WriteLine($"[BoxResultsAgent] Created vector store: {vectorStore.Value.Id}");
+            // Create vector store with the file
+            var stores = _vectorStoreClient.GetVectorStores();
+            VectorStore vectorStore = null;
+            if (stores != null && stores.Count() > 0)
+            {
+                vectorStore = stores.Where(s => s.Name == "Box Results Data Store").FirstOrDefault();
+            }
+            else
+            {
+                vectorStore = (await _vectorStoreClient.CreateVectorStoreAsync(true, new VectorStoreCreationOptions()
+                {
+                    Name = "Box Results Data Store",
+                    FileIds = { fileId },
+                    ExpirationPolicy = new VectorStoreExpirationPolicy(VectorStoreExpirationAnchor.LastActiveAt, 7),
+                })).Value;
+            }                
+
+            Console.WriteLine($"[BoxResultsAgent] Created vector store: {vectorStore.Id}");
 
             // Create assistant with file search capabilities
             AssistantCreationOptions assistantOptions = new()
@@ -257,7 +266,7 @@ namespace BookingsApi.Agents
                 {
                     FileSearch = new()
                     {
-                        VectorStoreIds = { vectorStore.Value.Id }
+                        VectorStoreIds = { vectorStore.Id }
                     }
                 }
             };
