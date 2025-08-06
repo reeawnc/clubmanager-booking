@@ -34,6 +34,7 @@ namespace BookingsApi.Agents
         private readonly VectorStoreClient _vectorStoreClient;
 #pragma warning restore OPENAI001
         private readonly OpenAIFileUploadService _openAIService;
+        private readonly AssistantPersistenceService _assistantPersistenceService;
         private string? _assistantId;
 
         public string Name => "box_results";
@@ -53,6 +54,7 @@ namespace BookingsApi.Agents
             _vectorStoreClient = openAIClient.GetVectorStoreClient();
 #pragma warning restore OPENAI001
             _openAIService = new OpenAIFileUploadService();
+            _assistantPersistenceService = new AssistantPersistenceService(new MockLogger());
         }
 
         public async Task<string> HandleAsync(string prompt, string? userId = null, string? sessionId = null)
@@ -272,18 +274,46 @@ namespace BookingsApi.Agents
             };
 
             Assistant assistant = null;
-            //todo load the assistant from a file in azure blob storage if it exists
-
-            var res = await _assistantClient.GetAssistantAsync("");
-            if (res.Value != null)
+            
+            // Try to load existing assistant ID from Azure blob storage
+            var savedAssistantId = await _assistantPersistenceService.LoadAssistantIdAsync("box-results");
+            
+            if (!string.IsNullOrEmpty(savedAssistantId))
             {
-                assistant = res.Value;
+                try
+                {
+                    // Try to get the existing assistant from OpenAI
+                    var res = await _assistantClient.GetAssistantAsync(savedAssistantId);
+                    if (res.Value != null)
+                    {
+                        assistant = res.Value;
+                        Console.WriteLine($"[BoxResultsAgent] Reusing existing assistant: {savedAssistantId}");
+                    }
+                    else
+                    {
+                        Console.WriteLine($"[BoxResultsAgent] Saved assistant ID {savedAssistantId} not found in OpenAI, will create new one");
+                        // Assistant doesn't exist in OpenAI anymore, delete the saved ID
+                        await _assistantPersistenceService.DeleteAssistantIdAsync("box-results");
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"[BoxResultsAgent] Error retrieving saved assistant {savedAssistantId}: {ex.Message}");
+                    // Assistant might be invalid, delete the saved ID
+                    await _assistantPersistenceService.DeleteAssistantIdAsync("box-results");
+                }
             }
-            else 
+            
+            // Create new assistant if we don't have a valid existing one
+            if (assistant == null)
             {
                 assistant = await _assistantClient.CreateAssistantAsync(ASSISTANT_MODEL, assistantOptions);
-                //todo, save this id in a file in azure blob storage for future use. extract this logic to a new class
+                Console.WriteLine($"[BoxResultsAgent] Created new assistant: {assistant.Id}");
+                
+                // Save the new assistant ID to Azure blob storage for future use
+                await _assistantPersistenceService.SaveAssistantIdAsync("box-results", assistant.Id);
             }
+            
             _assistantId = assistant.Id;
 
             Console.WriteLine($"[BoxResultsAgent] Created assistant: {assistant.Id}");
