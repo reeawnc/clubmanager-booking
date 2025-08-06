@@ -26,7 +26,7 @@ namespace BookingsApi.Agents
     /// </summary>
     public class BoxResultsAgent : IAgent
     {
-        private const string ASSISTANT_MODEL = "gpt-4o";
+        private const string ASSISTANT_MODEL = "gpt-4.1-nano";
         
         private readonly string _apiKey;
 #pragma warning disable OPENAI001 // Type is for evaluation purposes only and is subject to change or removal in future updates
@@ -106,7 +106,7 @@ namespace BookingsApi.Agents
                         // We just need to wait for completion
                     }
                     
-                    await Task.Delay(1000); // Wait 1 second before checking again
+                    await Task.Delay(500); // Wait 1 second before checking again
                     run = await _assistantClient.GetRunAsync(thread.Value.Id, run.Value.Id);
                 }
 
