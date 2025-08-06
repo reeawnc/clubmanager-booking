@@ -117,7 +117,7 @@ const quickPrompts = [
   {
     id: 8,
     text: "Give me a summary of the Box leage results for R Cunniffe this year"
-  }
+  },
   {
     id: 9,
     text: "Give me a summary of the Box leage results for Manolo Demery this year"
