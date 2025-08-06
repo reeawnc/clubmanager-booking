@@ -26,6 +26,8 @@ namespace BookingsApi.Agents
     /// </summary>
     public class BoxResultsAgent : IAgent
     {
+        private const string ASSISTANT_MODEL = "gpt-4o";
+        
         private readonly string _apiKey;
 #pragma warning disable OPENAI001 // Type is for evaluation purposes only and is subject to change or removal in future updates
         private readonly AssistantClient _assistantClient;
@@ -260,7 +262,7 @@ namespace BookingsApi.Agents
                 }
             };
 
-            var assistant = await _assistantClient.CreateAssistantAsync("gpt-4o", assistantOptions);
+            var assistant = await _assistantClient.CreateAssistantAsync(ASSISTANT_MODEL, assistantOptions);
             _assistantId = assistant.Value.Id;
             
             Console.WriteLine($"[BoxResultsAgent] Created assistant: {assistant.Value.Id}");
