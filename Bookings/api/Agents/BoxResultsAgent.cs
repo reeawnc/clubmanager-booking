@@ -406,17 +406,28 @@ namespace BookingsApi.Agents
                     Console.WriteLine("[BoxResultsAgent] Successfully downloaded existing file from Azure Blob");
                 }
 
-                // Delete any existing files with the same name from OpenAI
+                // Check for existing usable OpenAI file
                 var existingFiles = await _openAIService.ListFilesAsync(logger);
                 if (existingFiles.Success && existingFiles.Files != null)
                 {
-                    var filesToDelete = existingFiles.Files
+                    var existingFile = existingFiles.Files
+                        .FirstOrDefault(f => f.Filename == "summer_friendlies_all_results.json" &&
+                                             f.Status?.ToLowerInvariant() == "processed");
+
+                    if (existingFile != null && !string.IsNullOrEmpty(existingFile.Id))
+                    {
+                        Console.WriteLine($"[BoxResultsAgent] Reusing existing OpenAI file: {existingFile.Filename} (ID: {existingFile.Id})");
+                        return existingFile.Id;
+                    }
+
+                    // Otherwise: delete stale/unusable copies (e.g. status = failed, uploaded, etc)
+                    var staleFiles = existingFiles.Files
                         .Where(f => f.Filename == "summer_friendlies_all_results.json")
                         .ToList();
-                    
-                    foreach (var file in filesToDelete)
+
+                    foreach (var file in staleFiles)
                     {
-                        Console.WriteLine($"[BoxResultsAgent] Deleting existing OpenAI file: {file.Filename} (ID: {file.Id})");
+                        Console.WriteLine($"[BoxResultsAgent] Deleting stale OpenAI file: {file.Filename} (ID: {file.Id})");
                         await _openAIService.DeleteFileAsync(file.Id!, logger);
                     }
                 }
@@ -424,7 +435,7 @@ namespace BookingsApi.Agents
                 // Upload to OpenAI
                 Console.WriteLine("[BoxResultsAgent] Uploading file to OpenAI...");
                 var uploadResult = await _openAIService.UploadFileAsync(fileContent, "summer_friendlies_all_results.json", logger);
-                
+
                 if (uploadResult.Success && !string.IsNullOrEmpty(uploadResult.FileId))
                 {
                     Console.WriteLine($"[BoxResultsAgent] Successfully uploaded file to OpenAI: {uploadResult.FileId}");
@@ -435,6 +446,7 @@ namespace BookingsApi.Agents
                     Console.WriteLine($"[BoxResultsAgent] Failed to upload file to OpenAI: {uploadResult.ErrorMessage}");
                     return null;
                 }
+
             }
             catch (Exception ex)
             {
