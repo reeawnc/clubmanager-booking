@@ -12,8 +12,20 @@ namespace BookingsApi.Tools
         public string Description => "Fetches box league positions. Provide either groupId (string/number) or group (BoxGroupType name: Club, SummerFriendlies).";
         public Dictionary<string, object> Parameters => new()
         {
-            { "groupId", new { type = "string", description = "Group ID (e.g., '216')", required = false } },
-            { "group", new { type = "string", description = "Group name (BoxGroupType): Club or SummerFriendlies", required = false } }
+            ["type"] = "object",
+            ["properties"] = new Dictionary<string, object>
+            {
+                ["groupId"] = new Dictionary<string, object>
+                {
+                    ["type"] = "string",
+                    ["description"] = "Group ID (e.g., '216')"
+                },
+                ["group"] = new Dictionary<string, object>
+                {
+                    ["type"] = "string",
+                    ["description"] = "Group name (BoxGroupType): Club or SummerFriendlies"
+                }
+            }
         };
 
         private readonly BoxPositionsService _service = new();

@@ -28,6 +28,11 @@ namespace BookingsApi.Agents
     {
         private const string ASSISTANT_MODEL = "gpt-4o-mini";
         
+        // In-memory caches to avoid repeated lookups across warm executions
+        private static string? _cachedAssistantId;
+        private static string? _cachedFileId;
+        private static string? _cachedVectorStoreId;
+
         private readonly string _apiKey;
 #pragma warning disable OPENAI001 // Type is for evaluation purposes only and is subject to change or removal in future updates
         private readonly AssistantClient _assistantClient;
@@ -207,20 +212,19 @@ namespace BookingsApi.Agents
 #pragma warning restore OPENAI001
         {
 #pragma warning disable OPENAI001 // Type is for evaluation purposes only and is subject to change or removal in future updates
-            // Always create a new assistant to ensure fresh instructions that force file search
-            // This ensures the assistant will always use the file_search tool
-            if (!string.IsNullOrEmpty(_assistantId))
+            // Prefer cached assistant if available
+            if (!string.IsNullOrEmpty(_cachedAssistantId))
             {
                 try
                 {
-                    // Delete the old assistant to force creation of new one with updated instructions
-                    await _assistantClient.DeleteAssistantAsync(_assistantId);
+                    var res = await _assistantClient.GetAssistantAsync(_cachedAssistantId);
+                    if (res.Value != null)
+                    {
+                        _assistantId = _cachedAssistantId;
+                        return res.Value;
+                    }
                 }
-                catch
-                {
-                    // Ignore deletion errors
-                }
-                _assistantId = null;
+                catch { /* fallthrough to create */ }
             }
 
             // Get the file ID for our box results
@@ -232,14 +236,15 @@ namespace BookingsApi.Agents
 
             Console.WriteLine($"[BoxResultsAgent] Creating assistant with vector store for file: {fileId}");
 
-            // Create vector store with the file
-            var stores = _vectorStoreClient.GetVectorStores();
+            // Create or reuse vector store with the file
             VectorStore vectorStore = null;
-            if (stores != null && stores.Count() > 0)
+            // Note: direct GetVectorStoreAsync by ID may not be publicly accessible; rely on listing and name match
+            if (vectorStore == null)
             {
-                vectorStore = stores.Where(s => s.Name == "Box Results Data Store").FirstOrDefault();
+                var stores = _vectorStoreClient.GetVectorStores();
+                vectorStore = stores?.FirstOrDefault(s => s.Name == "Box Results Data Store");
             }
-            else
+            if (vectorStore == null)
             {
                 vectorStore = (await _vectorStoreClient.CreateVectorStoreAsync(true, new VectorStoreCreationOptions()
                 {
@@ -248,6 +253,7 @@ namespace BookingsApi.Agents
                     ExpirationPolicy = new VectorStoreExpirationPolicy(VectorStoreExpirationAnchor.LastActiveAt, 30),
                 })).Value;
             }
+            _cachedVectorStoreId = vectorStore.Id;
 
             Console.WriteLine($"[BoxResultsAgent] Created vector store: {vectorStore.Id}");
 
@@ -290,6 +296,7 @@ namespace BookingsApi.Agents
                     if (res.Value != null)
                     {
                         assistant = res.Value;
+                        _cachedAssistantId = savedAssistantId;
                         Console.WriteLine($"[BoxResultsAgent] Reusing existing assistant: {savedAssistantId}");
                     }
                     else
@@ -315,6 +322,7 @@ namespace BookingsApi.Agents
                 
                 // Save the new assistant ID to Azure blob storage for future use
                 await _assistantPersistenceService.SaveAssistantIdAsync("box-results", assistant.Id);
+                _cachedAssistantId = assistant.Id;
             }
             
             _assistantId = assistant.Id;
@@ -344,6 +352,10 @@ namespace BookingsApi.Agents
         {
             try
             {
+                if (!string.IsNullOrEmpty(_cachedFileId))
+                {
+                    return _cachedFileId;
+                }
                 // Create a mock logger for the service call
                 var mockLogger = new MockLogger();
                 
@@ -359,7 +371,8 @@ namespace BookingsApi.Agents
                     if (targetFile != null && !string.IsNullOrEmpty(targetFile.Id))
                     {
                         Console.WriteLine($"[BoxResultsAgent] Found existing file in OpenAI: {targetFile.Id}");
-                        return targetFile.Id;
+                        _cachedFileId = targetFile.Id;
+                        return _cachedFileId;
                     }
                 }
                 
@@ -442,7 +455,8 @@ namespace BookingsApi.Agents
                 if (uploadResult.Success && !string.IsNullOrEmpty(uploadResult.FileId))
                 {
                     Console.WriteLine($"[BoxResultsAgent] Successfully uploaded file to OpenAI: {uploadResult.FileId}");
-                    return uploadResult.FileId;
+                    _cachedFileId = uploadResult.FileId;
+                    return _cachedFileId;
                 }
                 else
                 {

@@ -8,7 +8,11 @@ namespace BookingsApi.Tools
     {
         public string Name => "get_user_has_messages";
         public string Description => "Checks if the user has messages in ClubManager";
-        public Dictionary<string, object> Parameters => new() { };
+        public Dictionary<string, object> Parameters => new()
+        {
+            ["type"] = "object",
+            ["properties"] = new Dictionary<string, object>()
+        };
 
         private readonly UserMessagesService _service = new();
 

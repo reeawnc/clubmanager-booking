@@ -11,7 +11,16 @@ namespace BookingsApi.Tools
         public string Description => "Cancels a court booking given a bookingId (number)";
         public Dictionary<string, object> Parameters => new()
         {
-            { "bookingId", new { type = "number", description = "Booking ID to cancel", required = true } }
+            ["type"] = "object",
+            ["properties"] = new Dictionary<string, object>
+            {
+                ["bookingId"] = new Dictionary<string, object>
+                {
+                    ["type"] = "number",
+                    ["description"] = "Booking ID to cancel"
+                }
+            },
+            ["required"] = new[] { "bookingId" }
         };
 
         private readonly CancellationService _service = new();

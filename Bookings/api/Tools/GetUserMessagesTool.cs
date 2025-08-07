@@ -10,9 +10,25 @@ namespace BookingsApi.Tools
         public string Description => "Fetches user messages (inbox) from ClubManager. Params: markAsRead (bool), showExpired (bool), showRead (bool)";
         public Dictionary<string, object> Parameters => new()
         {
-            { "markAsRead", new { type = "boolean", description = "Mark messages as read", required = false } },
-            { "showExpired", new { type = "boolean", description = "Include expired messages", required = false } },
-            { "showRead", new { type = "boolean", description = "Include read messages", required = false } },
+            ["type"] = "object",
+            ["properties"] = new Dictionary<string, object>
+            {
+                ["markAsRead"] = new Dictionary<string, object>
+                {
+                    ["type"] = "boolean",
+                    ["description"] = "Mark messages as read"
+                },
+                ["showExpired"] = new Dictionary<string, object>
+                {
+                    ["type"] = "boolean",
+                    ["description"] = "Include expired messages"
+                },
+                ["showRead"] = new Dictionary<string, object>
+                {
+                    ["type"] = "boolean",
+                    ["description"] = "Include read messages"
+                }
+            }
         };
 
         private readonly UserMessagesService _service = new();

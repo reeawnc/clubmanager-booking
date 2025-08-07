@@ -87,6 +87,9 @@ Always be helpful and provide clear information about the booking process.";
                 
                 // Initial call to OpenAI with tools
                 var options = new ChatCompletionOptions();
+                options.Temperature = 0.1f;
+                options.TopP = 0.9f;
+                options.MaxOutputTokenCount = 600;
                 if (tools.Any())
                 {
                     foreach (var tool in tools)

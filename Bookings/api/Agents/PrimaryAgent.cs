@@ -47,7 +47,7 @@ namespace BookingsApi.Agents
                 }
                 
                 // Step 3: Route to the appropriate agent
-                if (_agents.TryGetValue(agentRole, out var agent))
+                if (!string.IsNullOrEmpty(agentRole) && _agents.TryGetValue(agentRole, out var agent))
                 {
                     var response = await agent.HandleAsync(prompt, userId, sessionId);
                     return $"[DEBUG: {routingMethod} → {agentRole}]\n\n{response}";

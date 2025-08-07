@@ -8,7 +8,11 @@ namespace BookingsApi.Tools
     {
         public string Name => "get_my_bookings";
         public string Description => "Fetches the current user's bookings from ClubManager";
-        public Dictionary<string, object> Parameters => new() { };
+        public Dictionary<string, object> Parameters => new()
+        {
+            ["type"] = "object",
+            ["properties"] = new Dictionary<string, object>()
+        };
 
         private readonly MyBookingsService _service = new();
 

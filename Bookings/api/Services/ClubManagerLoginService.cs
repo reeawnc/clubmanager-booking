@@ -8,21 +8,46 @@ namespace BookingsApi.Services
 {
     public class ClubManagerLoginService
     {
+        private static readonly object SyncRoot = new();
+        private static HttpClient? _sharedClient;
+        private static HttpClientHandler? _sharedHandler;
+        private static DateTime _lastLoginUtc = DateTime.MinValue;
+        private static readonly TimeSpan SessionRefreshInterval = TimeSpan.FromMinutes(10);
+
         public async Task<HttpClient> GetAuthenticatedClientAsync()
         {
-            var cookies = new CookieContainer();
-            var handler = new HttpClientHandler
+            // Initialize shared client and handler once
+            if (_sharedClient == null)
             {
-                AutomaticDecompression = DecompressionMethods.GZip | DecompressionMethods.Deflate,
-                CookieContainer = cookies
-            };
+                lock (SyncRoot)
+                {
+                    if (_sharedClient == null)
+                    {
+                        _sharedHandler = new HttpClientHandler
+                        {
+                            AutomaticDecompression = DecompressionMethods.GZip | DecompressionMethods.Deflate,
+                            CookieContainer = new CookieContainer()
+                        };
+                        _sharedClient = new HttpClient(_sharedHandler);
+                    }
+                }
+            }
 
-            var client = new HttpClient(handler);
+            // Ensure session is fresh enough
+            if (DateTime.UtcNow - _lastLoginUtc > SessionRefreshInterval)
+            {
+                lock (SyncRoot)
+                {
+                    if (DateTime.UtcNow - _lastLoginUtc > SessionRefreshInterval)
+                    {
+                        // Re-login to refresh cookies/session
+                        _ = new Helpers.LoginHelper4().GetLoggedInRequestAsync(_sharedClient!);
+                        _lastLoginUtc = DateTime.UtcNow;
+                    }
+                }
+            }
 
-            // Establish session using existing helper; client retains cookies
-            _ = await new LoginHelper4().GetLoggedInRequestAsync(client);
-
-            return client;
+            return _sharedClient!;
         }
     }
 }

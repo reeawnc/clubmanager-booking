@@ -15,6 +15,8 @@ namespace BookingsApi.Services
     {
         private readonly ILogger _logger;
         private const string CONTAINER_NAME = "assistant-config";
+        private static readonly object SyncRoot = new();
+        private static string? _cachedAssistantId;
 
         public AssistantPersistenceService(ILogger logger)
         {
@@ -56,6 +58,10 @@ namespace BookingsApi.Services
 
                 using var stream = new MemoryStream(Encoding.UTF8.GetBytes(assistantId));
                 await blobClient.UploadAsync(stream, overwrite: true);
+                lock (SyncRoot)
+                {
+                    _cachedAssistantId = assistantId;
+                }
                 
                 _logger.LogInformation($"Successfully saved assistant ID for {assistantType}: {assistantId}");
                 return true;
@@ -74,6 +80,13 @@ namespace BookingsApi.Services
         /// <returns>The assistant ID if found, null otherwise</returns>
         public async Task<string?> LoadAssistantIdAsync(string assistantType)
         {
+            lock (SyncRoot)
+            {
+                if (!string.IsNullOrEmpty(_cachedAssistantId))
+                {
+                    return _cachedAssistantId;
+                }
+            }
             if (string.IsNullOrEmpty(assistantType))
             {
                 throw new ArgumentException("Assistant type is required", nameof(assistantType));
@@ -105,7 +118,9 @@ namespace BookingsApi.Services
                     if (!string.IsNullOrWhiteSpace(assistantId))
                     {
                         _logger.LogInformation($"Successfully loaded assistant ID for {assistantType}: {assistantId}");
-                        return assistantId.Trim();
+                        var id = assistantId.Trim();
+                        lock (SyncRoot) { _cachedAssistantId = id; }
+                        return id;
                     }
                 }
                 

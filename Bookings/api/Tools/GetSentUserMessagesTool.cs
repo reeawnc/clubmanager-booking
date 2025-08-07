@@ -8,7 +8,11 @@ namespace BookingsApi.Tools
     {
         public string Name => "get_sent_user_messages";
         public string Description => "Fetches the user's sent messages from ClubManager";
-        public Dictionary<string, object> Parameters => new() { };
+        public Dictionary<string, object> Parameters => new()
+        {
+            ["type"] = "object",
+            ["properties"] = new Dictionary<string, object>()
+        };
 
         private readonly UserMessagesService _service = new();
 

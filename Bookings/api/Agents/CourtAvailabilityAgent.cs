@@ -151,6 +151,9 @@ You have access to tools that can fetch real-time court availability data.
             };
             
             var options = new ChatCompletionOptions();
+            options.Temperature = 0.2f;
+            options.TopP = 0.9f;
+            options.MaxOutputTokenCount = 600;
             if (tools.Any())
             {
                 foreach (var tool in tools)
