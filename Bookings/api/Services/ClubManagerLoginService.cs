@@ -13,6 +13,7 @@ namespace BookingsApi.Services
         private static HttpClientHandler? _sharedHandler;
         private static DateTime _lastLoginUtc = DateTime.MinValue;
         private static readonly TimeSpan SessionRefreshInterval = TimeSpan.FromMinutes(10);
+        private static readonly System.Threading.SemaphoreSlim _loginSemaphore = new(1, 1);
 
         public async Task<HttpClient> GetAuthenticatedClientAsync()
         {
@@ -36,14 +37,19 @@ namespace BookingsApi.Services
             // Ensure session is fresh enough
             if (DateTime.UtcNow - _lastLoginUtc > SessionRefreshInterval)
             {
-                lock (SyncRoot)
+                await _loginSemaphore.WaitAsync();
+                try
                 {
                     if (DateTime.UtcNow - _lastLoginUtc > SessionRefreshInterval)
                     {
                         // Re-login to refresh cookies/session
-                        _ = new Helpers.LoginHelper4().GetLoggedInRequestAsync(_sharedClient!);
+                        await new Helpers.LoginHelper4().GetLoggedInRequestAsync(_sharedClient!);
                         _lastLoginUtc = DateTime.UtcNow;
                     }
+                }
+                finally
+                {
+                    _loginSemaphore.Release();
                 }
             }
 
