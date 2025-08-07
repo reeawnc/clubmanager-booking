@@ -86,46 +86,30 @@ const messageInput = ref<HTMLTextAreaElement>()
 const messagesContainer = ref<HTMLElement>()
 
 const quickPrompts = [
-  {
-    id: 1,
-    text: "Show me the court timetable for today after 5pm"
-  },
-  {
-    id: 2,
-    text: "Book a court for 6:45pm today"
-  },
-  {
-    id: 3,
-    text: "Who as won the most boxes in A1?"
-  },
-  {
-    id: 4,
-    text: "What time slots are available tomorrow after 5pm?"
-  },
-  {
-    id: 5,
-    text: "Book a court for 6pm this day next week"
-  },
-  {
-    id: 6,
-    text: "Book a court for 6:45pm this day next week"
-  },
-  {
-    id: 7,
-    text: "What time slots are availalbe on this day next week after 5pm?"
-  },
-  {
-    id: 8,
-    text: `Give me a summary of the Box league results for R Cunniffe ${new Date().getFullYear()}`
-  },
-  {
-    id: 9,
-    text: `Give me a summary of the Box league results for Manolo Demery ${new Date().getFullYear()}`
-  },
-  {
-    id: 10,
-    text: `Compare the Box League Results for R Cunniffe and Manolo Demery in ${new Date().getFullYear()} in the Main Group`
-  }
+  // Court availability
+  { id: 1,  text: "Show me the court timetable for today after 5pm" },
+  { id: 2,  text: "What time slots are available tomorrow after 5pm?" },
+  { id: 3,  text: "Who's playing on Court 2 at 19:00 today?" },
+
+  // Booking
+  { id: 4,  text: "Book a court for 18:00 today" },
+  { id: 5,  text: "Book a court for 18:45 this day next week" },
+
+  // My bookings
+  { id: 6,  text: "Show my bookings" },
+
+  // Messages
+  { id: 7,  text: "Do I have any unread messages?" },
+  { id: 8,  text: "Show my inbox messages" },
+  { id: 9,  text: "Show my sent messages" },
+
+  // Box positions (use enums for clarity/context)
+  { id: 10, text: "Show current box positions for Club" },
+  { id: 11, text: "Show current box positions for SummerFriendlies" },
+
+  // Box results (RAG)
+  { id: 12, text: `Give me a summary of the box league results for R Cunniffe ${new Date().getFullYear()}` },
+  { id: 13, text: `Compare the box league results for R Cunniffe and Manolo Demery in ${new Date().getFullYear()} in the Main Group` },
 ]
 
 const sendMessage = async () => {

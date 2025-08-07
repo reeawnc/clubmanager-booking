@@ -84,6 +84,24 @@ namespace BookingsApi.Agents
                 return "cancellation";
             }
             
+            // My bookings keywords
+            if (lowercasePrompt.Contains("my bookings") || lowercasePrompt.Contains("my booking") || lowercasePrompt.Contains("what have i booked") || lowercasePrompt.Contains("when am i playing"))
+            {
+                return "my_bookings";
+            }
+
+            // Messaging keywords
+            if (lowercasePrompt.Contains("messages") || lowercasePrompt.Contains("inbox") || lowercasePrompt.Contains("unread") || lowercasePrompt.Contains("sent messages") || lowercasePrompt.Contains("have any messages"))
+            {
+                return "messages";
+            }
+
+            // Box positions keywords
+            if ((lowercasePrompt.Contains("box") || lowercasePrompt.Contains("league")) && (lowercasePrompt.Contains("positions") || lowercasePrompt.Contains("table") || lowercasePrompt.Contains("standings")))
+            {
+                return "box_positions";
+            }
+
             // Box results keywords
             if (lowercasePrompt.Contains("box") || lowercasePrompt.Contains("league") || lowercasePrompt.Contains("results") 
                 || lowercasePrompt.Contains("statistics") || lowercasePrompt.Contains("standings") || lowercasePrompt.Contains("rankings")
@@ -128,6 +146,9 @@ namespace BookingsApi.Agents
             _agents["court_availability"] = new CourtAvailabilityAgent(_openAIClient);
             _agents["booking"] = new BookingAgent(_openAIClient);
             _agents["cancellation"] = new CancellationAgent(_openAIClient);
+            _agents["my_bookings"] = new MyBookingsAgent(_openAIClient);
+            _agents["messages"] = new MessagesAgent(_openAIClient);
+            _agents["box_positions"] = new BoxPositionsAgent(_openAIClient);
             
             // Register BoxResultsAgent - it will automatically find the file ID
             _agents["box_results"] = new BoxResultsAgent();
