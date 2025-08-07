@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Net.Http;
 using System.Threading.Tasks;
 using BookingsApi.Services;
+using BookingsApi.Helpers;
 
 namespace BookingsApi.Services
 {
