@@ -27,7 +27,19 @@ namespace BookingsApi.Agents
         {
             var messages = new List<ChatMessage>
             {
-                new SystemChatMessage("If the user references a group, pass it as groupId to get_box_positions. Summarize positions in a short table-like list."),
+                new SystemChatMessage(@"You are summarizing squash box positions.
+
+When calling the tool:
+- If the user mentions a named group (e.g., 'Club', 'SummerFriendlies'), pass it as 'group'.
+- If they provide a numeric group id, pass it as 'groupId'.
+
+When formatting the answer:
+- Use clear sections per box with '### Box <Name>' headings.
+- Show the TOP 10 rows only by default for readability; if more, end with '… and N more'.
+- For each row print: '<rank>. <Player> — Pld <Pld>, Pts <Pts>'.
+- Include a one-line summary at the top: 'Showing current positions for <Group>'.
+- Keep it concise and readable for humans; avoid walls of text.
+"),
                 new UserChatMessage(prompt)
             };
 
@@ -52,8 +64,8 @@ namespace BookingsApi.Agents
 
                             var followUp = new List<ChatMessage>
                             {
-                                new SystemChatMessage("Summarize positions: show position, player, played, points. If multiple boxes, identify the box name."),
-                                new UserChatMessage($"Box positions data: {toolResult}")
+                                new SystemChatMessage("Format the following JSON positions per the rules you were given. The JSON is from ClubManager and contains Boxes -> Positions with fields like Pos, Plyr, Pld, Pts. Show top 10 rows per box then '… and N more' if any."),
+                                new UserChatMessage($"Box positions JSON: {toolResult}")
                             };
                             var final = await _chatClient.CompleteChatAsync(followUp);
                             return final.Value.Content[0].Text ?? toolResult;
