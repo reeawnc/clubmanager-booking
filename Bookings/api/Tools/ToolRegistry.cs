@@ -35,6 +35,12 @@ namespace BookingsApi.Tools
             RegisterTool(new GetCourtAvailabilityTool());
             RegisterTool(new BookCourtTool());
             RegisterTool(new GetBoxResultsTool());
+            RegisterTool(new GetMyBookingsTool());
+            RegisterTool(new GetUserHasMessagesTool());
+            RegisterTool(new GetUserMessagesTool());
+            RegisterTool(new GetSentUserMessagesTool());
+            RegisterTool(new CancelCourtTool());
+            RegisterTool(new GetBoxPositionsTool());
         }
     }
 }

@@ -1,61 +1,119 @@
-# Court Booking Assistant
+# ClubManager Booking — Frontend (Vue) + API (Azure Functions)
 
-A sleek, ChatGPT-like Vue.js interface for interacting with your Azure Function App court booking system.
+A chat-driven squash court assistant with a Vue 3 frontend and an Azure Functions API (multi-agent, OpenAI tools, and Azurite-backed storage for assistants and files).
 
-## Features
+## How to run locally (Windows)
 
-- 🌙 Dark theme inspired by ChatGPT
-- 💬 Real-time chat interface
-- ⚡ Quick action buttons for common queries
-- 🎾 Court availability and booking information
-- 📱 Responsive design
+Open three terminals and run these commands in order:
 
-## Setup
-
-1. Install dependencies:
+1) Storage emulator (Azurite)
 ```bash
-npm install
+azurite --silent --location c:\azurite --debug c:\azurite\debug.log
 ```
 
-2. Start the development server:
+2) API (Azure Functions)
 ```bash
+cd Bookings/api
+func start
+```
+Default URL: `http://localhost:7071`
+
+3) Frontend (Vue)
+```bash
+cd Bookings
+npm ci
 npm run dev
 ```
+Default URL: `http://localhost:5173`
 
-3. Make sure your Azure Function App is running locally on `http://localhost:7071`
+### Prerequisites
+- Node 18+
+- .NET 8 SDK
+- Azure Functions Core Tools v4
+- Azurite (for local Azure Storage emulation)
+- OpenAI API key configured in `Bookings/api/local.settings.json` as `OpenAI_API_Key` (used by agents/tools)
 
-## API Integration
+## Project structure
+- `Bookings/` – Vue frontend
+- `Bookings/api/` – Azure Functions (isolated worker)
+  - Agents: `Agents/`
+  - Tools: `Tools/`
+  - Services: `Services/`
+  - Functions: `PromptFunction.cs` (main), plus test-only functions under project root
 
-The app connects to your Azure Function at:
-- **Endpoint**: `http://localhost:7071/api/PromptFunction`
-- **Method**: POST
-- **Payload**:
+## Primary app flow
+- Frontend posts to `POST /api/PromptFunction` with:
 ```json
-{
-    "prompt": "Show me the court availability for today",
-    "userId": "testuser123", 
-    "sessionId": "testsession456"
-}
+{ "prompt": "...", "userId": "...", "sessionId": "..." }
 ```
+- The API routes the prompt via `PrimaryAgent` to sub-agents based on keywords or LLM routing.
+- Agents can call domain-specific tools to fetch/act on real data.
 
-## Quick Actions
+## Agents (multi-agent architecture)
+- `CourtAvailabilityAgent`: checks court day schedule and formats availability.
+- `BookingAgent`: books courts (prefers Court 1 → 2 → 3) via tools.
+- `CancellationAgent`: placeholder conversational cancellation.
+- `BoxResultsAgent`: OpenAI Assistants + File Search over aggregated box results.
+- `MyBookingsAgent`: summarizes current user bookings.
+- `MessagesAgent`: inbox/unread/sent messages summary.
+- `BoxPositionsAgent`: current box league positions.
 
-The interface includes preset buttons for common queries:
-- "Show me court availability for today after 5pm"
-- "Who's playing today after 5pm?"
-- "Show me today's court availability"
+## Tools (selected)
+- `get_court_availability`, `book_court`
+- `get_box_results` (OpenAI file search), persistence via Azure Blob
+- `get_my_bookings`
+- `get_user_has_messages`, `get_user_messages`, `get_sent_user_messages`
+- `cancel_court`
+- `get_box_positions` (accepts `groupId` or `group` enum: `Club`, `SummerFriendlies`)
 
-## Tech Stack
+## Test-only API endpoints (service isolation)
+These bypass agents so you can validate integrations one by one.
 
-- Vue 3 with TypeScript
-- Pinia for state management
-- Vue Router
-- Vite for build tooling
+- `POST /api/test/my-bookings`
+  - No body
 
-## Development
+- `POST /api/test/messages/has`
+  - No body
 
-- `npm run dev` - Start development server
-- `npm run build` - Build for production
-- `npm run preview` - Preview production build
-- `npm run lint` - Run ESLint
-- `npm run format` - Format code with Prettier
+- `POST /api/test/messages/inbox`
+  - Body (optional):
+  ```json
+  { "markAsRead": false, "showExpired": false, "showRead": true }
+  ```
+
+- `POST /api/test/messages/sent`
+  - No body
+
+- `POST /api/test/cancel-court`
+  - Body:
+  ```json
+  { "bookingId": 12345 }
+  ```
+
+- `POST /api/test/box-positions`
+  - Body (either):
+  ```json
+  { "groupId": "216" }
+  ```
+  or
+  ```json
+  { "groupId": "418" }
+  ```
+  or using enum-like name via chat prompt (through agent): `Club`, `SummerFriendlies`
+
+## Configuration
+- `Bookings/api/local.settings.json`
+  - `AzureWebJobsStorage`: `UseDevelopmentStorage=true` (works with Azurite)
+  - `OpenAI_API_Key`: required for LLM agents/tools and file search
+
+## Quick prompts (frontend)
+Initial buttons in the chat showcase key features:
+- Court availability: “Show me the court timetable for today after 5pm”
+- Booking: “Book a court for 18:00 today”
+- My bookings: “Show my bookings”
+- Messages: “Do I have any unread messages?”, “Show my inbox messages”, “Show my sent messages”
+- Box positions: “Show current box positions for Club/SummerFriendlies”
+- Box results (RAG): results summaries and comparisons
+
+## Deploy (Azure Static Web Apps)
+The repo includes a workflow that builds the Vue app and deploys an integrated API from `Bookings/api`. Ensure the same settings (`AzureWebJobsStorage`, `OpenAI_API_Key`) are configured in the Azure environment.
