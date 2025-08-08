@@ -4,6 +4,7 @@ using System.Net.Http;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using BookingsApi.Services;
+using BookingsApi.Helpers;
 
 namespace BookingsApi.Services
 {
@@ -19,10 +20,9 @@ namespace BookingsApi.Services
 
         public async Task<string> GetBoxPositionsAsync(string groupId)
         {
-            using var client = await _loginService.GetAuthenticatedClientAsync();
-
-            // Ensure a session is established by loading the calendar page first (hidden fields are not required here but replicate original flow)
-            var _ = await client.GetAsync(new Uri("https://clubmanager365.com/CourtCalendar.aspx?club=westwood&sport=squash"));
+            var client = await _loginService.GetAuthenticatedClientAsync();
+            // Ensure fresh authenticated session (retains cookies across calls)
+            await new LoginHelper4().GetLoggedInRequestAsync(client);
 
             var param = new Dictionary<string, string>
             {

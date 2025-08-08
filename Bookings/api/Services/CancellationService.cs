@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Net.Http;
 using System.Threading.Tasks;
 using BookingsApi.Services;
+using BookingsApi.Helpers;
 
 namespace BookingsApi.Services
 {
@@ -17,7 +18,9 @@ namespace BookingsApi.Services
 
         public async Task<string> CancelCourtAsync(long bookingId)
         {
-            using var client = await _loginService.GetAuthenticatedClientAsync();
+            var client = await _loginService.GetAuthenticatedClientAsync();
+            // Ensure fresh authenticated session before performing cancellation
+            await new LoginHelper4().GetLoggedInRequestAsync(client);
             var parameters = new Dictionary<string, string>
             {
                 { "siteCallback", "CourtCallback" },
