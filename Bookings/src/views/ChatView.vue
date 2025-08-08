@@ -14,6 +14,19 @@
       </svg>
     </button>
 
+    <!-- Home button - stacked under clear when visible -->
+    <router-link
+      to="/"
+      class="home-button"
+      title="Home"
+      aria-label="Home"
+    >
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M3 11l9-7 9 7"></path>
+        <path d="M5 10v10a1 1 0 0 0 1 1h4a1 1 0 0 0 1-1v-5h2v5a1 1 0 0 0 1 1h4a1 1 0 0 0 1-1V10"></path>
+      </svg>
+    </router-link>
+
     <!-- Messages Area -->
     <main class="messages-container" ref="messagesContainer">
       <!-- Initial prompt buttons when no messages -->
@@ -29,6 +42,13 @@
             {{ prompt.text }}
           </button>
         </div>
+        <!-- Floating home circle shown on empty state as well for consistency -->
+        <router-link to="/" class="home-button empty-state-home" aria-label="Home">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M3 11l9-7 9 7"></path>
+            <path d="M5 10v10a1 1 0 0 0 1 1h4a1 1 0 0 0 1-1v-5h2v5a1 1 0 0 0 1 1h4a1 1 0 0 0 1-1V10"></path>
+          </svg>
+        </router-link>
       </div>
 
       <!-- Chat messages -->
@@ -67,17 +87,24 @@
           </button>
         </div>
       </div>
+      <div class="below-input-actions">
+        <button class="linkish" @click="resetChat">Reset</button>
+        <router-link class="linkish" to="/">Home</router-link>
+      </div>
     </footer>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, nextTick, onMounted, onUnmounted } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { storeToRefs } from 'pinia'
 import { useChatStore } from '@/stores/chat'
 import ChatMessage from '@/components/ChatMessage.vue'
 
 const chatStore = useChatStore()
+const route = useRoute()
+const router = useRouter()
 const { messages, isLoading } = storeToRefs(chatStore)
 const { sendMessage: storeSendMessage, clearChat } = chatStore
 
@@ -85,37 +112,46 @@ const inputMessage = ref('')
 const messageInput = ref<HTMLTextAreaElement>()
 const messagesContainer = ref<HTMLElement>()
 
-const quickPrompts = [
-  // Court availability
-  { id: 1,  text: "Show me the court timetable for today after 5pm" },
-  { id: 2,  text: "What time slots are available tomorrow after 5pm?" },
-  { id: 3,  text: "Who's playing on Court 2 at 19:00 today?" },
+const CATEGORY_PROMPTS: Record<string, { id: number; text: string }[]> = {
+  courts: [
+    { id: 1, text: 'Show me the court timetable for today after 5pm' },
+    { id: 2, text: 'What time slots are available tomorrow after 5pm?' },
+    { id: 3, text: "Who\'s playing on Court 2 at 19:00 today?" },
+    { id: 4, text: 'Show me only bookable slots after 18:30 today' },
+    { id: 5, text: 'Who is playing tonight?' },
+    { id: 6, text: 'Show availability for Court 1 and Court 3 between 18:00 and 20:00' },
+  ],
+  booking: [
+    { id: 10, text: 'Book a court for 18:00 today' },
+    { id: 11, text: 'Book a court for 18:45 this day next week' },
+    { id: 12, text: 'Book a 45-minute slot between 19:00 and 20:00 tomorrow' },
+    { id: 13, text: 'Find the next available 45-minute slot tonight and book it' },
+  ],
+  mybookings: [
+    { id: 20, text: 'Show my bookings' },
+    { id: 21, text: 'Cancel my next booking' },
+    { id: 22, text: 'What time is my next booking?' },
+  ],
+  messages: [
+    { id: 30, text: 'Do I have any unread messages?' },
+    { id: 31, text: 'Show my inbox messages' },
+    { id: 32, text: 'Show my sent messages' },
+    { id: 33, text: 'Search my messages for “league”' },
+  ],
+  boxpositions: [
+    { id: 40, text: 'Show current box positions for Club' },
+    { id: 41, text: 'Show current box positions for SummerFriendlies' },
+    { id: 42, text: 'Summarize top 3 in each box for SummerFriendlies' },
+  ],
+  liveresults: [
+    { id: 50, text: 'Live results: Show current SummerFriendlies match results' },
+    { id: 51, text: 'Live results: Show current Club match results' },
+    { id: 52, text: 'Live results: Show current results for Box A1 only' },
+  ],
+}
 
-  // Booking
-  { id: 4,  text: "Book a court for 18:00 today" },
-  { id: 5,  text: "Book a court for 18:45 this day next week" },
-
-  // My bookings
-  { id: 6,  text: "Show my bookings" },
-
-  // Messages
-  { id: 7,  text: "Do I have any unread messages?" },
-  { id: 8,  text: "Show my inbox messages" },
-  { id: 9,  text: "Show my sent messages" },
-
-  // Box positions (use enums for clarity/context)
-  { id: 10, text: "Show current box positions for Club" },
-  { id: 11, text: "Show current box positions for SummerFriendlies" },
-
-  // Box results (RAG)
-  // Historical results via file search (spans years)
-  { id: 12, text: `Historical results (file): Summarize box results for R Cunniffe across ${new Date().getFullYear()}` },
-  { id: 13, text: `Historical results (file): Compare R Cunniffe vs Manolo Demery across ${new Date().getFullYear()}` },
-
-  // Live results direct from ClubManager (current league only)
-  { id: 14, text: "Live results: Show current SummerFriendlies match results" },
-  { id: 15, text: "Live results: Show current Club match results" },
-]
+const selectedCategory = ref<string>('courts')
+const quickPrompts = ref<{ id: number; text: string }[]>(CATEGORY_PROMPTS[selectedCategory.value])
 
 const sendMessage = async () => {
   if (!inputMessage.value.trim() || isLoading.value) return
@@ -185,6 +221,11 @@ const autoResize = () => {
     messageInput.value.style.height = Math.min(messageInput.value.scrollHeight, 120) + 'px'
   }
 }
+const resetChat = () => {
+  clearChat()
+  // stay in chat, but show contextual prompts for last selected category
+  quickPrompts.value = CATEGORY_PROMPTS[selectedCategory.value] || []
+}
 
 const scrollToBottom = async () => {
   await nextTick()
@@ -203,6 +244,16 @@ const handleResize = () => {
 
 onMounted(() => {
   messageInput.value?.focus()
+  // Pick category from query and update contextual prompts
+  const c = (route.query.c as string) || ''
+  if (c && CATEGORY_PROMPTS[c]) {
+    selectedCategory.value = c
+    quickPrompts.value = CATEGORY_PROMPTS[c]
+  }
+  // Clean the query so refresh doesn't replay
+  if (Object.keys(route.query).length > 0) {
+    router.replace({ path: route.path, query: {} })
+  }
   
   // Prevent page scrolling on mobile
   document.body.style.overflow = 'hidden'
@@ -259,6 +310,30 @@ onUnmounted(() => {
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
   backdrop-filter: blur(8px);
 }
+
+.home-button {
+  position: fixed;
+  top: 4.1rem; /* add spacing from clear button */
+  right: 1rem;
+  z-index: 99;
+  background: #21262d;
+  border: 1px solid #30363d;
+  color: #7d8590;
+  padding: 0.6rem;
+  border-radius: 50%;
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  backdrop-filter: blur(8px);
+}
+.home-button:hover { background: #30363d; color: #e6edf3; border-color: #58a6ff; transform: translateY(-1px); box-shadow: 0 6px 16px rgba(0, 0, 0, 0.4); }
+
+/* Slightly lower when in empty state (to avoid overlap with headerless layout) */
+.empty-state-home { top: 4.1rem; }
 
 .clear-button:hover {
   background: #30363d;
@@ -319,6 +394,8 @@ onUnmounted(() => {
   width: 100%;
   max-width: 500px;
 }
+
+/* removed old inline Home link styles to keep circular consistency */
 
 .prompt-btn {
   background: #21262d;
