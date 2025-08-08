@@ -15,17 +15,18 @@
     </button>
 
     <!-- Home button - stacked under clear when visible -->
-    <router-link
-      to="/"
+    <button
       class="home-button"
+      :class="messages.length > 0 ? 'home-below' : 'home-top'"
       title="Home"
       aria-label="Home"
+      @click="goHome"
     >
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
         <path d="M3 11l9-7 9 7"></path>
         <path d="M5 10v10a1 1 0 0 0 1 1h4a1 1 0 0 0 1-1v-5h2v5a1 1 0 0 0 1 1h4a1 1 0 0 0 1-1V10"></path>
       </svg>
-    </router-link>
+    </button>
 
     <!-- Messages Area -->
     <main class="messages-container" ref="messagesContainer">
@@ -42,13 +43,7 @@
             {{ prompt.text }}
           </button>
         </div>
-        <!-- Floating home circle shown on empty state as well for consistency -->
-        <router-link to="/" class="home-button empty-state-home" aria-label="Home">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M3 11l9-7 9 7"></path>
-            <path d="M5 10v10a1 1 0 0 0 1 1h4a1 1 0 0 0 1-1v-5h2v5a1 1 0 0 0 1 1h4a1 1 0 0 0 1-1V10"></path>
-          </svg>
-        </router-link>
+        <!-- Home circle already present globally; no duplicate needed here -->
       </div>
 
       <!-- Chat messages -->
@@ -69,7 +64,7 @@
             v-model="inputMessage"
             @keydown="handleKeyDown"
             @input="autoResize"
-            placeholder="Ask about courts..."
+            :placeholder="placeholderText"
             class="message-input"
             rows="1"
             ref="messageInput"
@@ -87,16 +82,12 @@
           </button>
         </div>
       </div>
-      <div class="below-input-actions">
-        <button class="linkish" @click="resetChat">Reset</button>
-        <router-link class="linkish" to="/">Home</router-link>
-      </div>
     </footer>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, nextTick, onMounted, onUnmounted } from 'vue'
+import { ref, nextTick, onMounted, onUnmounted, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { storeToRefs } from 'pinia'
 import { useChatStore } from '@/stores/chat'
@@ -152,6 +143,18 @@ const CATEGORY_PROMPTS: Record<string, { id: number; text: string }[]> = {
 
 const selectedCategory = ref<string>('courts')
 const quickPrompts = ref<{ id: number; text: string }[]>(CATEGORY_PROMPTS[selectedCategory.value])
+
+const placeholderText = computed(() => {
+  const map: Record<string, string> = {
+    courts: 'Ask about availability, times or who\'s playing…',
+    booking: 'Describe the slot you\'d like to book…',
+    mybookings: 'Ask about your upcoming bookings…',
+    messages: 'Ask about unread, inbox or sent messages…',
+    boxpositions: 'Ask for current standings or summaries…',
+    liveresults: 'Ask for current box results (e.g., Box A1)…',
+  }
+  return map[selectedCategory.value] || 'Ask your question…'
+})
 
 const sendMessage = async () => {
   if (!inputMessage.value.trim() || isLoading.value) return
@@ -221,10 +224,9 @@ const autoResize = () => {
     messageInput.value.style.height = Math.min(messageInput.value.scrollHeight, 120) + 'px'
   }
 }
-const resetChat = () => {
+const goHome = () => {
   clearChat()
-  // stay in chat, but show contextual prompts for last selected category
-  quickPrompts.value = CATEGORY_PROMPTS[selectedCategory.value] || []
+  router.push('/')
 }
 
 const scrollToBottom = async () => {
@@ -313,7 +315,7 @@ onUnmounted(() => {
 
 .home-button {
   position: fixed;
-  top: 4.1rem; /* add spacing from clear button */
+  top: 1rem; /* default top when clear not shown */
   right: 1rem;
   z-index: 99;
   background: #21262d;
@@ -332,8 +334,9 @@ onUnmounted(() => {
 }
 .home-button:hover { background: #30363d; color: #e6edf3; border-color: #58a6ff; transform: translateY(-1px); box-shadow: 0 6px 16px rgba(0, 0, 0, 0.4); }
 
-/* Slightly lower when in empty state (to avoid overlap with headerless layout) */
-.empty-state-home { top: 4.1rem; }
+/* When messages exist, animate the home button below the clear button */
+.home-below { top: 4.2rem; transition: top .2s ease; }
+.home-top { top: 1rem; transition: top .2s ease; }
 
 .clear-button:hover {
   background: #30363d;
