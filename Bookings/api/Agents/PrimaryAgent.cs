@@ -159,7 +159,7 @@ namespace BookingsApi.Agents
             // Register BoxResultsAgent - historical/file search
             _agents["box_results"] = new BoxResultsAgent();
             // Register LiveResultsAgent - direct HTTP without file search
-            _agents["live_results"] = new LiveResultsAgent();
+            _agents["live_results"] = new LiveResultsAgent(_openAIClient);
             
             // Note: StatsAgent not implemented yet, but can be added here when ready
             // _agents["stats"] = new StatsAgent(_openAIClient);

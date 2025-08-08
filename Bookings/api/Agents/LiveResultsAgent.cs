@@ -2,6 +2,10 @@ using System;
 using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
+using System.Collections.Generic;
+using System.Text.Json;
+using OpenAI;
+using OpenAI.Chat;
 using System.Threading.Tasks;
 using BookingsApi.Services;
 
@@ -10,13 +14,15 @@ namespace BookingsApi.Agents
     public class LiveResultsAgent : IAgent
     {
         private readonly BoxResultsService _resultsService;
+        private readonly ChatClient _chatClient;
 
         public string Name => "live_results";
-        public string Description => "Handles live/current box results directly from ClubManager (no file search).";
+        public string Description => "Handles live/current box results directly from ClubManager (no file search). Formats output via LLM.";
 
-        public LiveResultsAgent()
+        public LiveResultsAgent(OpenAIClient openAIClient)
         {
             _resultsService = new BoxResultsService();
+            _chatClient = openAIClient.GetChatClient("gpt-4o-mini");
         }
 
         public async Task<string> HandleAsync(string prompt, string? userId = null, string? sessionId = null)
@@ -46,9 +52,8 @@ namespace BookingsApi.Agents
                 return $"No live results found for {group}.";
             }
 
-            var sb = new StringBuilder();
-            sb.AppendLine($"Here are the current match results for {group}:");
-
+            // Build a minimal JSON payload of played matches only
+            var boxesOut = new List<Dictionary<string, object>>();
             foreach (var box in data.Boxes)
             {
                 if (!string.IsNullOrEmpty(requestedBox))
@@ -60,35 +65,64 @@ namespace BookingsApi.Agents
                     }
                 }
                 if (box.Results == null || box.Results.Count == 0) continue;
+
                 var orderedAll = box.Results
                     .OrderByDescending(r => r.Date)
                     .ThenByDescending(r => r.MatchID)
                     .ToList();
-                var ordered = string.IsNullOrEmpty(requestedBox) ? orderedAll.Take(10).ToList() : orderedAll;
 
-                sb.AppendLine($"\n### {box.Name}");
-                int i = 1;
-                foreach (var r in ordered)
+                var played = new List<Dictionary<string, object>>();
+                foreach (var r in orderedAll)
                 {
-                    var date = r.Date != default ? r.Date.ToString("yyyy-MM-dd") : "Unknown";
-                    var score = string.IsNullOrWhiteSpace(r.Score) ? "v" : r.Score;
-                    string winner = "";
-                    // Try infer winner from score "A B" format
-                    var parts = score.Split(' ', StringSplitOptions.RemoveEmptyEntries);
-                    if (parts.Length >= 3 && int.TryParse(parts[0], out var p1) && int.TryParse(parts[2], out var p2))
+                    if (!TryParseScore(r.Score, out var s1, out var s2)) continue;
+                    if (r.Date == default) continue;
+                    var winner = s1 > s2 ? r.P1 : s2 > s1 ? r.P2 : "Draw";
+                    played.Add(new Dictionary<string, object>
                     {
-                        winner = p1 > p2 ? r.P1 : p2 > p1 ? r.P2 : "Draw";
-                    }
-                    sb.AppendLine($"{i}. {r.P1} vs. {r.P2}\n- Score: {score}\n- Date: {date}\n- Winner: {winner}");
-                    i++;
+                        ["p1"] = r.P1,
+                        ["p2"] = r.P2,
+                        ["score"] = $"{s1} v {s2}",
+                        ["date"] = r.Date.ToString("yyyy-MM-dd"),
+                        ["winner"] = winner
+                    });
                 }
-                if (string.IsNullOrEmpty(requestedBox) && orderedAll.Count > ordered.Count)
+
+                if (played.Count == 0) continue;
+
+                if (string.IsNullOrEmpty(requestedBox) && played.Count > 10)
                 {
-                    sb.AppendLine($"… and {orderedAll.Count - ordered.Count} more");
+                    played = played.Take(10).ToList();
                 }
+
+                boxesOut.Add(new Dictionary<string, object>
+                {
+                    ["boxName"] = box.Name,
+                    ["matches"] = played
+                });
             }
 
-            return sb.ToString().TrimEnd();
+            if (boxesOut.Count == 0)
+            {
+                return "No completed matches found.";
+            }
+
+            var json = JsonSerializer.Serialize(boxesOut);
+            var messages = new List<ChatMessage>
+            {
+                new SystemChatMessage("You format squash box results. Show only played matches. For each box: heading '### <Box Name>' then a numbered list 'Player1 vs Player2 — Score S1–S2 — Date YYYY-MM-DD — Winner: Name'. Keep it concise; return plain text, no JSON."),
+                new UserChatMessage($"Group: {group}. Data: {json}")
+            };
+            var completion = await _chatClient.CompleteChatAsync(messages, new ChatCompletionOptions { Temperature = 0.1f, MaxOutputTokenCount = 600 });
+            return completion.Value.Content[0].Text ?? "No output";
+        }
+
+        private static bool TryParseScore(string? score, out int s1, out int s2)
+        {
+            s1 = 0; s2 = 0;
+            if (string.IsNullOrWhiteSpace(score)) return false;
+            var m = Regex.Match(score, @"(?<a>\d+)\s*v\s*(?<b>\d+)", RegexOptions.IgnoreCase);
+            if (!m.Success) return false;
+            return int.TryParse(m.Groups["a"].Value, out s1) && int.TryParse(m.Groups["b"].Value, out s2);
         }
     }
 }
