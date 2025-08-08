@@ -21,6 +21,57 @@ namespace Bookings.Tests
         }
 
         [Fact]
+        public async Task Approval_NextWeek_AvailableOnly_MultiDay()
+        {
+            if (!TryGetClient(out var client)) { return; }
+
+            DateTime today = DateTime.Today;
+            int diffToMon = (7 + (int)DayOfWeek.Monday - (int)today.DayOfWeek) % 7;
+            var nextMondayDate = today.AddDays(diffToMon + 7);
+            var nextTuesdayDate = nextMondayDate.AddDays(1);
+
+            var nextMonday = new
+            {
+                Date = nextMondayDate.ToString("dd MMM yy"),
+                Courts = new object[]
+                {
+                    new { Name = "Court 1", CourtNumber = "1", Cells = new object[] {
+                        new { TimeSlot = "18:00 - 18:30", Status = "available", Player = "Available", IsBooked = false },
+                        new { TimeSlot = "18:30 - 19:00", Status = "booked", Player = "X vs Y", IsBooked = true } } },
+                }
+            };
+            var nextTuesday = new
+            {
+                Date = nextTuesdayDate.ToString("dd MMM yy"),
+                Courts = new object[]
+                {
+                    new { Name = "Court 2", CourtNumber = "2", Cells = new object[] {
+                        new { TimeSlot = "18:00 - 18:30", Status = "booked", Player = "A vs B", IsBooked = true },
+                        new { TimeSlot = "19:00 - 19:30", Status = "available", Player = "Available", IsBooked = false } } },
+                }
+            };
+
+            var mapping = new Dictionary<string, string>
+            {
+                [nextMonday.Date] = System.Text.Json.JsonSerializer.Serialize(nextMonday),
+                [nextTuesday.Date] = System.Text.Json.JsonSerializer.Serialize(nextTuesday)
+            };
+            var registry = new ToolRegistry();
+            registry.RegisterTool(new MockCourtAvailabilityTool(mapping));
+
+            var agent = new CourtAvailabilityAgent(client, registry);
+
+            var prompt = "Show only available slots between 6pm and 7:30 for Monday and Tuesday next week";
+            var result = await agent.HandleAsync(prompt);
+
+            result.Should().Contain("Day 1");
+            result.Should().Contain("Day 2");
+            result.Should().Contain("18:00 - 18:30");
+            result.Should().Contain("19:00 - 19:30");
+            result.Should().NotContain("X vs Y");
+            result.Should().NotContain("A vs B");
+        }
+        [Fact]
         public async Task Approval_TodayAfter5pm_WithMockedData()
         {
             if (!TryGetClient(out var client)) { return; }

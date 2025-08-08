@@ -112,6 +112,7 @@ const CATEGORY_PROMPTS: Record<string, { id: number; text: string }[]> = {
     { id: 5, text: 'Who is playing tonight?' },
     { id: 6, text: 'Show availability for Court 1 and Court 3 between 18:00 and 20:00' },
     { id: 7, text: 'Show me the court timetable between 6pm and 7:30 for Monday, Tuesday, Wednesday and Thursday this week' },
+    { id: 8, text: 'Show only available slots between 6pm and 7:30 for Monday and Tuesday next week' },
   ],
   booking: [
     { id: 10, text: 'Book a court for 18:00 today' },

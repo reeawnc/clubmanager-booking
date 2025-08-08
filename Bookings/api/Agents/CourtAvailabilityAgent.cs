@@ -91,7 +91,7 @@ You have access to tools that can fetch real-time court availability data.
                 bool isPreformattedBlock = false;
                 // Pre-parse multi-day/time-range intent early
                 var hasRange = TryExtractTimeRange(prompt, out var rangeStart, out var rangeEnd);
-                var days = TryExtractWeekdays(prompt, out var scopeThisWeek);
+                var days = TryExtractWeekdaysWithScope(prompt, out var scopeThisWeek, out var scopeNextWeek);
 
                 // Deterministic test path: bypass LLM planning and return structured, filtered list directly
                 if (_deterministicFormatting)
@@ -102,12 +102,17 @@ You have access to tools that can fetch real-time court availability data.
                         // If multi-day, aggregate first and return
                         if (days.Count > 1)
                         {
-                            var dateMap = ComputeDatesForWeekdays(days, scopeThisWeek);
+                            var dateMap = ComputeDatesForWeekdays(days, scopeThisWeek, scopeNextWeek);
                             var sections = new List<(string dateLabel, string json)>();
                             foreach (var d in dateMap)
                             {
                                 var tr = await availabilityTool.ExecuteAsync(new Dictionary<string, object> { ["date"] = d.dateForTool });
                                 if (hasRange) tr = FilterAvailabilityJsonByRange(tr, rangeStart, rangeEnd);
+                                var availableOnly = prompt.Contains("only available", StringComparison.OrdinalIgnoreCase)
+                                    || prompt.Contains("available only", StringComparison.OrdinalIgnoreCase)
+                                    || prompt.Contains("exclude booked", StringComparison.OrdinalIgnoreCase)
+                                    || prompt.Contains("available slots", StringComparison.OrdinalIgnoreCase);
+                                if (availableOnly) tr = FilterAvailableOnly(tr);
                                 sections.Add((d.displayDate, tr));
                             }
                             var structuredMulti = BuildStructuredListForMultipleDays(sections);
@@ -145,7 +150,7 @@ You have access to tools that can fetch real-time court availability data.
                     var availabilityTool = _toolRegistry.GetTool("get_court_availability");
                     if (availabilityTool != null)
                     {
-                        var dateMap = ComputeDatesForWeekdays(days, scopeThisWeek);
+                        var dateMap = ComputeDatesForWeekdays(days, scopeThisWeek, scopeNextWeek);
                         var sections = new List<(string dateLabel, string json)>();
                         foreach (var d in dateMap)
                         {
@@ -153,6 +158,13 @@ You have access to tools that can fetch real-time court availability data.
                             if (hasRange)
                             {
                                 toolResult = FilterAvailabilityJsonByRange(toolResult, rangeStart, rangeEnd);
+                            }
+                            if (prompt.Contains("only available", StringComparison.OrdinalIgnoreCase)
+                                || prompt.Contains("available only", StringComparison.OrdinalIgnoreCase)
+                                || prompt.Contains("exclude booked", StringComparison.OrdinalIgnoreCase)
+                                || prompt.Contains("available slots", StringComparison.OrdinalIgnoreCase))
+                            {
+                                toolResult = FilterAvailableOnly(toolResult);
                             }
                             sections.Add((d.displayDate, toolResult));
                         }
@@ -656,6 +668,45 @@ RULES:
             catch { return json; }
         }
 
+        private static string FilterAvailableOnly(string json)
+        {
+            try
+            {
+                using var doc = JsonDocument.Parse(json);
+                var root = doc.RootElement;
+                if (!root.TryGetProperty("Courts", out var courts)) return json;
+                var result = new List<object>();
+                foreach (var court in courts.EnumerateArray())
+                {
+                    if (!court.TryGetProperty("Cells", out var cells)) continue;
+                    var keptCells = new List<object>();
+                    foreach (var cell in cells.EnumerateArray())
+                    {
+                        // Available when IsBooked is false
+                        var isBooked = cell.TryGetProperty("IsBooked", out var ib) && ib.ValueKind == JsonValueKind.True;
+                        if (!isBooked)
+                        {
+                            keptCells.Add(JsonSerializer.Deserialize<object>(cell.GetRawText())!);
+                        }
+                    }
+                    if (keptCells.Count == 0) continue;
+                    result.Add(new Dictionary<string, object>
+                    {
+                        ["Name"] = court.TryGetProperty("Name", out var nm) ? nm.GetString() : null,
+                        ["CourtNumber"] = court.TryGetProperty("CourtNumber", out var cn) ? cn.GetString() : null,
+                        ["Cells"] = keptCells
+                    });
+                }
+                var filtered = new Dictionary<string, object>
+                {
+                    ["Date"] = root.TryGetProperty("Date", out var date) ? date.GetString() : null,
+                    ["Courts"] = result
+                };
+                return JsonSerializer.Serialize(filtered);
+            }
+            catch { return json; }
+        }
+
         private static string FilterAvailabilityJsonByRange(string json, TimeSpan startInclusive, TimeSpan endInclusive)
         {
             try
@@ -698,9 +749,10 @@ RULES:
             catch { return json; }
         }
 
-        private static List<string> TryExtractWeekdays(string prompt, out bool thisWeek)
+        private static List<string> TryExtractWeekdaysWithScope(string prompt, out bool thisWeek, out bool nextWeek)
         {
             thisWeek = prompt.Contains("this week", StringComparison.OrdinalIgnoreCase);
+            nextWeek = prompt.Contains("next week", StringComparison.OrdinalIgnoreCase);
             var days = new List<string>();
             var dayNames = new[] { "monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday" };
             var lower = prompt.ToLowerInvariant();
@@ -747,13 +799,13 @@ RULES:
             return true;
         }
 
-        private static List<(string displayDate, string dateForTool)> ComputeDatesForWeekdays(List<string> days, bool thisWeek)
+        private static List<(string displayDate, string dateForTool)> ComputeDatesForWeekdays(List<string> days, bool thisWeek, bool nextWeek = false)
         {
             var today = DateTime.Today;
             // start of week as Monday
             int diff = (7 + (int)today.DayOfWeek - (int)DayOfWeek.Monday) % 7;
             var monday = today.AddDays(-diff);
-            var baseWeek = thisWeek ? monday : monday; // for now support only this week; can extend to next week logic
+            var baseWeek = nextWeek ? monday.AddDays(7) : monday;
             var result = new List<(string displayDate, string dateForTool)>();
             foreach (var dn in days)
             {
