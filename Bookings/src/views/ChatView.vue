@@ -108,8 +108,13 @@ const quickPrompts = [
   { id: 11, text: "Show current box positions for SummerFriendlies" },
 
   // Box results (RAG)
-  { id: 12, text: `Give me a summary of the box league results for R Cunniffe ${new Date().getFullYear()}` },
-  { id: 13, text: `Compare the box league results for R Cunniffe and Manolo Demery in ${new Date().getFullYear()} in the Main Group` },
+  // Historical results via file search (spans years)
+  { id: 12, text: `Historical results (file): Summarize box results for R Cunniffe across ${new Date().getFullYear()}` },
+  { id: 13, text: `Historical results (file): Compare R Cunniffe vs Manolo Demery across ${new Date().getFullYear()}` },
+
+  // Live results direct from ClubManager (current league only)
+  { id: 14, text: "Live results: Show current SummerFriendlies match results" },
+  { id: 15, text: "Live results: Show current Club match results" },
 ]
 
 const sendMessage = async () => {

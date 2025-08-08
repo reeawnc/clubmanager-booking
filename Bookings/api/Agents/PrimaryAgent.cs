@@ -102,7 +102,13 @@ namespace BookingsApi.Agents
                 return "box_positions";
             }
 
-            // Box results keywords
+            // Live results keywords (explicit)
+            if (lowercasePrompt.Contains("live results") || lowercasePrompt.Contains("current results"))
+            {
+                return "live_results";
+            }
+
+            // Box results keywords (historical/file)
             if (lowercasePrompt.Contains("box") || lowercasePrompt.Contains("league") || lowercasePrompt.Contains("results") 
                 || lowercasePrompt.Contains("statistics") || lowercasePrompt.Contains("standings") || lowercasePrompt.Contains("rankings")
                 || lowercasePrompt.Contains("player") || lowercasePrompt.Contains("match") || lowercasePrompt.Contains("score")
@@ -150,8 +156,10 @@ namespace BookingsApi.Agents
             _agents["messages"] = new MessagesAgent(_openAIClient);
             _agents["box_positions"] = new BoxPositionsAgent(_openAIClient);
             
-            // Register BoxResultsAgent - it will automatically find the file ID
+            // Register BoxResultsAgent - historical/file search
             _agents["box_results"] = new BoxResultsAgent();
+            // Register LiveResultsAgent - direct HTTP without file search
+            _agents["live_results"] = new LiveResultsAgent();
             
             // Note: StatsAgent not implemented yet, but can be added here when ready
             // _agents["stats"] = new StatsAgent(_openAIClient);

@@ -8,11 +8,20 @@ using System.Text;
 using Newtonsoft.Json;
 using System.Linq;
 using BookingsApi.Models;
+using BookingsApi.Services;
+using BookingsApi.Helpers;
 
 namespace BookingsApi.Services
 {
     public class BoxResultsService
     {
+        private readonly ClubManagerLoginService _loginService;
+
+        public BoxResultsService()
+        {
+            _loginService = new ClubManagerLoginService();
+        }
+
         public async Task<BoxResultsRoot> GetBoxResultsAsync(BoxGroupType groupType = BoxGroupType.SummerFriendlies, object leagueId = null)
         {
             // Determine the league ID based on group type and provided league ID
@@ -35,71 +44,44 @@ namespace BookingsApi.Services
             }
 
             const string baseAddress = "https://clubmanager365.com/ActionHandler.ashx";
-            CookieContainer cookies = new CookieContainer();
-            HttpClientHandler handler = new HttpClientHandler()
+
+            var client = await _loginService.GetAuthenticatedClientAsync();
+            // Ensure fresh authenticated session and cookies
+            await new LoginHelper4().GetLoggedInRequestAsync(client);
+
+            // Build API call parameters
+            var parameters = new Dictionary<string, string>
             {
-                AutomaticDecompression = DecompressionMethods.GZip | DecompressionMethods.Deflate,
-                CookieContainer = cookies,
+                { "siteCallback", "BoxLeagueCallback" },
+                { "action", "GetBoxLeagueResults" },
             };
-            
-            using (var client = new HttpClient(handler))
+            var queryString = string.Join("&", parameters.Select(p => $"{Uri.EscapeDataString(p.Key)}={Uri.EscapeDataString(p.Value)}"));
+            var url = $"{baseAddress}?{queryString}";
+            url = url += $"&{{\"LeagueID\":{actualLeagueId},\"GroupID\":\"{(int)groupType}\"}}";
+            var newUrl = new Uri(url);
+
+            // Make the API call
+            var response = await client.GetAsync(newUrl);
+            var contents = await response.Content.ReadAsStringAsync();
+
+            // Deserialize the response
+            var boxResults = JsonConvert.DeserializeObject<BoxResultsRoot>(contents);
+
+            // Process the results - add date parsing
+            if (boxResults?.Boxes != null)
             {
-                // Initial page load to get session cookies
-                Uri uri = new Uri("https://clubmanager365.com/CourtCalendar.aspx?club=westwood&sport=squash");
-                var response = await client.GetAsync(uri);                    
-                var contents = await response.Content.ReadAsStringAsync();
-
-                // Extract hidden fields (not used in this API call but kept for consistency)
-                var __VIEWSTATE = "";
-                var __VIEWSTATEGENERATOR = "";
-                var __PREVIOUSPAGE = "";
-                var __EVENTVALIDATION = "";
-                Match match = Regex.Match(contents, "<input type=\"hidden\" name=\"__VIEWSTATE\"[^>]*? value=\"(.*)\"");
-                if (match.Success) __VIEWSTATE = match.Groups[1].Value;
-
-                match = Regex.Match(contents, "<input type=\"hidden\" name=\"__VIEWSTATEGENERATOR\"[^>]*? value=\"(.*)\"");
-                if (match.Success) __VIEWSTATEGENERATOR = match.Groups[1].Value;
-
-                match = Regex.Match(contents, "<input type=\"hidden\" name=\"__PREVIOUSPAGE\"[^>]*? value=\"(.*)\"");
-                if (match.Success) __PREVIOUSPAGE = match.Groups[1].Value;
-
-                match = Regex.Match(contents, "<input type=\"hidden\" name=\"__EVENTVALIDATION\"[^>]*? value=\"(.*)\"");
-                if (match.Success) __EVENTVALIDATION = match.Groups[1].Value;
-
-                // Build API call parameters
-                var parameters = new Dictionary<string, string>
+                foreach (var result in boxResults.Boxes.SelectMany(box => box.Results))
                 {
-                    { "siteCallback", "BoxLeagueCallback" },
-                    { "action", "GetBoxLeagueResults" },
-                };
-                var queryString = string.Join("&", parameters.Select(p => $"{Uri.EscapeDataString(p.Key)}={Uri.EscapeDataString(p.Value)}"));
-                var url = $"{baseAddress}?{queryString}";
-                url = url += $"&{{\"LeagueID\":{actualLeagueId},\"GroupID\":\"{(int)groupType}\"}}";
-                var newUrl = new Uri(url);
-
-                // Make the API call
-                response = await client.GetAsync(newUrl);
-                contents = await response.Content.ReadAsStringAsync();                    
-                
-                // Deserialize the response
-                var boxResults = JsonConvert.DeserializeObject<BoxResultsRoot>(contents);
-
-                // Process the results - add date parsing
-                if (boxResults?.Boxes != null)
-                {
-                    foreach (var result in boxResults.Boxes.SelectMany(box => box.Results))
+                    result.ResultTimeStamp = result.ResultTimeStamp?.Trim();
+                    if (!string.IsNullOrEmpty(result.ResultTimeStamp))
                     {
-                        result.ResultTimeStamp = result.ResultTimeStamp?.Trim();
-                        if (!string.IsNullOrEmpty(result.ResultTimeStamp))
-                        {
-                            DateTime.TryParse(result.ResultTimeStamp, out var date);
-                            result.Date = date;
-                        }
+                        DateTime.TryParse(result.ResultTimeStamp, out var date);
+                        result.Date = date;
                     }
                 }
-
-                return boxResults;
             }
+
+            return boxResults;
         }
     }
 
