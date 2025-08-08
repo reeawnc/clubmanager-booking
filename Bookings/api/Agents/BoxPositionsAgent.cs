@@ -5,6 +5,7 @@ using System.Collections.Generic;
 using System.Text.Json;
 using System.Threading.Tasks;
 using BookingsApi.Tools;
+using System.Text;
 
 namespace BookingsApi.Agents
 {
@@ -61,10 +62,17 @@ When formatting the answer:
                         {
                             var parameters = JsonSerializer.Deserialize<Dictionary<string, object>>(functionCall.FunctionArguments) ?? new();
                             var toolResult = await tool.ExecuteAsync(parameters);
+                            // Deterministic formatting to avoid raw JSON appearing in UI
+                            var formatted = TryFormatBoxPositions(toolResult);
+                            if (!string.IsNullOrWhiteSpace(formatted))
+                            {
+                                return formatted!;
+                            }
 
+                            // Fallback to an LLM formatting attempt if parsing failed
                             var followUp = new List<ChatMessage>
                             {
-                                new SystemChatMessage("Format the following JSON positions per the rules you were given. The JSON is from ClubManager and contains Boxes -> Positions with fields like Pos, Plyr, Pld, Pts. Show top 10 rows per box then '… and N more' if any."),
+                                new SystemChatMessage("Format the following JSON positions into human-readable text with: headings per box, top 10 rows, and '… and N more'. NEVER return JSON or a code block; return plain text only."),
                                 new UserChatMessage($"Box positions JSON: {toolResult}")
                             };
                             var final = await _chatClient.CompleteChatAsync(followUp);
@@ -75,6 +83,73 @@ When formatting the answer:
             }
 
             return response.Value.Content[0].Text ?? "Unable to retrieve box positions right now.";
+        }
+
+        private static string? TryFormatBoxPositions(string json)
+        {
+            try
+            {
+                using var doc = JsonDocument.Parse(json);
+                var root = doc.RootElement;
+                if (!root.TryGetProperty("Boxes", out var boxes) || boxes.ValueKind != JsonValueKind.Array)
+                {
+                    return null;
+                }
+
+                var sb = new StringBuilder();
+                sb.AppendLine("Showing current positions");
+
+                foreach (var box in boxes.EnumerateArray())
+                {
+                    var name = box.TryGetProperty("Name", out var n) ? n.GetString() : "Box";
+                    sb.AppendLine($"\n### {name}");
+
+                    if (!box.TryGetProperty("Positions", out var positions) || positions.ValueKind != JsonValueKind.Array)
+                    {
+                        continue;
+                    }
+
+                    int count = 0;
+                    int total = positions.GetArrayLength();
+                    foreach (var pos in positions.EnumerateArray())
+                    {
+                        if (count >= 10) break;
+                        var rank = pos.TryGetProperty("Pos", out var pPos) ? pPos.GetInt32() : count + 1;
+                        var player = pos.TryGetProperty("Plyr", out var pPlyr) ? pPlyr.GetString() : "Unknown";
+                        var played = pos.TryGetProperty("Pld", out var pPld) ? SafeGetInt(pPld) : 0;
+                        var points = pos.TryGetProperty("Pts", out var pPts) ? SafeGetInt(pPts) : 0;
+                        sb.AppendLine($"{rank}. {player} — Pld {played}, Pts {points}");
+                        count++;
+                    }
+                    if (total > count)
+                    {
+                        sb.AppendLine($"… and {total - count} more");
+                    }
+                }
+
+                return sb.ToString().TrimEnd();
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
+        private static int SafeGetInt(JsonElement element)
+        {
+            try
+            {
+                return element.ValueKind switch
+                {
+                    JsonValueKind.Number => element.TryGetInt32(out var i) ? i : (int)element.GetDouble(),
+                    JsonValueKind.String => int.TryParse(element.GetString(), out var s) ? s : 0,
+                    _ => 0
+                };
+            }
+            catch
+            {
+                return 0;
+            }
         }
     }
 }
