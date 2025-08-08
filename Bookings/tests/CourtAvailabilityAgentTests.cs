@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Threading.Tasks;
 using FluentAssertions;
 using OpenAI;
@@ -152,6 +153,49 @@ namespace Bookings.Tests
             result.Should().NotContain("17:30 - 18:15");
         }
 
+        [Fact]
+        public async Task Approval_MultiDay_TimeRange_ThisWeek()
+        {
+            if (!TryGetClient(out var client)) { return; }
+
+            // Build two days of deterministic data (Monday and Tuesday)
+            // Only include times that overlap 18:00–19:30
+            var monday = new
+            {
+                Date = DateTime.Today.AddDays(((int)DayOfWeek.Monday - (int)DateTime.Today.DayOfWeek + 7) % 7).ToString("dd MMM yy"),
+                Courts = new object[]
+                {
+                    new { Name = "Court 1", CourtNumber = "1", Cells = new object[] { new { TimeSlot = "18:00 - 18:30", Status = "available", Player = "Available", IsBooked = false }, new { TimeSlot = "18:30 - 19:00", Status = "available", Player = "Available", IsBooked = false } } },
+                    new { Name = "Court 2", CourtNumber = "2", Cells = new object[] { new { TimeSlot = "18:00 - 18:30", Status = "booked", Player = "A vs B", IsBooked = true }, new { TimeSlot = "19:00 - 19:30", Status = "available", Player = "Available", IsBooked = false } } }
+                }
+            };
+            var tuesday = new
+            {
+                Date = DateTime.Today.AddDays(((int)DayOfWeek.Tuesday - (int)DateTime.Today.DayOfWeek + 7) % 7).ToString("dd MMM yy"),
+                Courts = new object[]
+                {
+                    new { Name = "Court 3", CourtNumber = "3", Cells = new object[] { new { TimeSlot = "18:00 - 18:30", Status = "available", Player = "Available", IsBooked = false }, new { TimeSlot = "19:00 - 19:30", Status = "booked", Player = "C vs D", IsBooked = true } } }
+                }
+            };
+
+            // Registry that returns the right day's payload depending on 'date'
+            var registry = new ToolRegistry();
+            var mapping = new Dictionary<string, string>
+            {
+                [monday.Date] = System.Text.Json.JsonSerializer.Serialize(monday),
+                [tuesday.Date] = System.Text.Json.JsonSerializer.Serialize(tuesday)
+            };
+            registry.RegisterTool(new MockCourtAvailabilityTool(mapping));
+
+            var agent = new CourtAvailabilityAgent(client, registry);
+
+            var prompt = "Show me the court timetable between 6pm and 7:30 for Monday and Tuesday this week";
+            var result = await agent.HandleAsync(prompt);
+
+            result.Should().Contain("Day 1");
+            result.Should().Contain("Day 2");
+            result.Should().Contain("18:00 - 18:30");
+        }
         [Fact]
         public async Task Approval_WhoIsPlaying_Tonight_ShowsBookedPlayersOnly()
         {

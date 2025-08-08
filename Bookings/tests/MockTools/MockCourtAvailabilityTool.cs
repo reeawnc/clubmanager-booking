@@ -8,10 +8,18 @@ namespace Bookings.Tests.MockTools
     public class MockCourtAvailabilityTool : ITool
     {
         private readonly string _payload;
+        private readonly Dictionary<string, string>? _dateToPayload;
 
         public MockCourtAvailabilityTool(string payload)
         {
             _payload = payload;
+        }
+
+        // Overload: provide date->payload mapping for multi-day tests
+        public MockCourtAvailabilityTool(Dictionary<string, string> dateToPayload)
+        {
+            _payload = string.Empty;
+            _dateToPayload = dateToPayload;
         }
 
         public string Name => "get_court_availability";
@@ -24,6 +32,15 @@ namespace Bookings.Tests.MockTools
 
         public Task<string> ExecuteAsync(Dictionary<string, object> parameters)
         {
+            if (_dateToPayload != null)
+            {
+                var date = parameters != null && parameters.TryGetValue("date", out var d) ? d?.ToString() ?? string.Empty : string.Empty;
+                if (!string.IsNullOrEmpty(date) && _dateToPayload.TryGetValue(date, out var payload))
+                {
+                    return Task.FromResult(payload);
+                }
+                return Task.FromResult("{\"Date\":\"\",\"Courts\":[]}");
+            }
             return Task.FromResult(_payload);
         }
     }

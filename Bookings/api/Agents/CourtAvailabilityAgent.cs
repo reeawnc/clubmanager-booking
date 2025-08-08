@@ -88,6 +88,10 @@ You have access to tools that can fetch real-time court availability data.
                 var isWhatCourtAmIOn = prompt.Contains("what court am i on", StringComparison.OrdinalIgnoreCase);
                 var playerQuery = TryExtractPlayerName(prompt);
                 string? availabilityJson = null;
+                bool isPreformattedBlock = false;
+                // Pre-parse multi-day/time-range intent early
+                var hasRange = TryExtractTimeRange(prompt, out var rangeStart, out var rangeEnd);
+                var days = TryExtractWeekdays(prompt, out var scopeThisWeek);
 
                 // Deterministic test path: bypass LLM planning and return structured, filtered list directly
                 if (_deterministicFormatting)
@@ -95,6 +99,21 @@ You have access to tools that can fetch real-time court availability data.
                     var availabilityTool = _toolRegistry.GetTool("get_court_availability");
                     if (availabilityTool != null)
                     {
+                        // If multi-day, aggregate first and return
+                        if (days.Count > 1)
+                        {
+                            var dateMap = ComputeDatesForWeekdays(days, scopeThisWeek);
+                            var sections = new List<(string dateLabel, string json)>();
+                            foreach (var d in dateMap)
+                            {
+                                var tr = await availabilityTool.ExecuteAsync(new Dictionary<string, object> { ["date"] = d.dateForTool });
+                                if (hasRange) tr = FilterAvailabilityJsonByRange(tr, rangeStart, rangeEnd);
+                                sections.Add((d.displayDate, tr));
+                            }
+                            var structuredMulti = BuildStructuredListForMultipleDays(sections);
+                            return string.IsNullOrWhiteSpace(structuredMulti) ? "No matching courts or time slots found." : structuredMulti;
+                        }
+
                         var toolResult = await availabilityTool.ExecuteAsync(new Dictionary<string, object>());
                         if (hasSpecificTime)
                         {
@@ -118,6 +137,33 @@ You have access to tools that can fetch real-time court availability data.
                     }
                 }
                 
+                // Multi-day intent detection (already parsed earlier)
+
+                // If multi-day was requested, aggregate over multiple days ourselves, then format
+                if (days.Count > 1)
+                {
+                    var availabilityTool = _toolRegistry.GetTool("get_court_availability");
+                    if (availabilityTool != null)
+                    {
+                        var dateMap = ComputeDatesForWeekdays(days, scopeThisWeek);
+                        var sections = new List<(string dateLabel, string json)>();
+                        foreach (var d in dateMap)
+                        {
+                            var toolResult = await availabilityTool.ExecuteAsync(new Dictionary<string, object> { ["date"] = d.dateForTool });
+                            if (hasRange)
+                            {
+                                toolResult = FilterAvailabilityJsonByRange(toolResult, rangeStart, rangeEnd);
+                            }
+                            sections.Add((d.displayDate, toolResult));
+                        }
+                        var structuredMulti = BuildStructuredListForMultipleDays(sections);
+                        if (!string.IsNullOrWhiteSpace(structuredMulti))
+                        {
+                            return structuredMulti; // deterministic path returns preformatted
+                        }
+                    }
+                }
+
                 // Initial call to OpenAI with tools
                 var response = await CallOpenAIAsync(prompt, tools);
                 
@@ -176,6 +222,30 @@ You have access to tools that can fetch real-time court availability data.
                     var availabilityTool = _toolRegistry.GetTool("get_court_availability");
                     if (availabilityTool != null)
                     {
+                        // If multi-day request detected, aggregate
+                        if (days.Count > 1)
+                        {
+                            var dateMap = ComputeDatesForWeekdays(days, scopeThisWeek);
+                            var sections = new List<(string dateLabel, string json)>();
+                            foreach (var d in dateMap)
+                            {
+                                var tr = await availabilityTool.ExecuteAsync(new Dictionary<string, object> { ["date"] = d.dateForTool });
+                                if (hasRange)
+                                {
+                                    tr = FilterAvailabilityJsonByRange(tr, rangeStart, rangeEnd);
+                                }
+                                sections.Add((d.displayDate, tr));
+                            }
+                            var structuredMulti = BuildStructuredListForMultipleDays(sections);
+                            if (!string.IsNullOrWhiteSpace(structuredMulti))
+                            {
+                                collectedToolResults.Add($"get_court_availability: {structuredMulti}");
+                                availabilityJson = structuredMulti;
+                                isPreformattedBlock = true;
+                                goto RESPOND;
+                            }
+                        }
+
                         var toolResult = await availabilityTool.ExecuteAsync(new Dictionary<string, object>());
 
                         if (hasSpecificTime)
@@ -201,6 +271,7 @@ You have access to tools that can fetch real-time court availability data.
                     }
                 }
 
+RESPOND:
                 if (collectedToolResults.Any())
                 {
                     var system = GetSystemPrompt();
@@ -218,6 +289,13 @@ You have access to tools that can fetch real-time court availability data.
                         system += $"\nFor 'what court am I on', answer concisely with the court and time for '{playerQuery}'. If multiple, list them on separate lines.";
                     }
 
+                    // If we built a multi-day block already, return it directly to avoid LLM hallucinations
+                    if (isPreformattedBlock && !string.IsNullOrWhiteSpace(availabilityJson))
+                    {
+                        return availabilityJson;
+                    }
+
+                    // Otherwise, build a structured single-day block
                     var formattedBlock = availabilityJson != null ? BuildStructuredListFromAvailability(availabilityJson) : string.Empty;
                     if (_deterministicFormatting && !string.IsNullOrWhiteSpace(formattedBlock))
                     {
@@ -474,6 +552,7 @@ RULES:
           (Repeat per court that has a matching slot; Omit empty courts)
         - If the question includes 'who is playing', list only booked slots and present as Player(s) — Time (HH:MM - HH:MM) — Court X
         - If the question includes 'what court am I on' and a player's name is present in the data, answer with the court(s) and time(s) for that player, concisely
+        - If the request spans multiple days, structure output by day with clear sections: 'Day 1 — <Day, Date>', 'Day 2 — <Day, Date>', each listing courts and their matching time slots under that day
         - When no specific time is requested, you may present full sections for booked and available slots as usual
 ";
         }
@@ -617,6 +696,111 @@ RULES:
                 return JsonSerializer.Serialize(filtered);
             }
             catch { return json; }
+        }
+
+        private static List<string> TryExtractWeekdays(string prompt, out bool thisWeek)
+        {
+            thisWeek = prompt.Contains("this week", StringComparison.OrdinalIgnoreCase);
+            var days = new List<string>();
+            var dayNames = new[] { "monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday" };
+            var lower = prompt.ToLowerInvariant();
+            foreach (var dn in dayNames)
+            {
+                if (Regex.IsMatch(lower, $"\\b{dn}\\b")) days.Add(dn);
+            }
+            return days;
+        }
+
+        private static bool TryExtractTimeRange(string prompt, out TimeSpan start, out TimeSpan end)
+        {
+            start = default; end = default;
+            var lower = prompt.ToLowerInvariant()
+                .Replace("pm", " pm").Replace("am", " am");
+            // Accept forms like "6pm", "6 pm", "7:30", "18:00"
+            var matches = Regex.Matches(lower, @"(\b\d{1,2}(?::\d{2})?\s?(am|pm)?\b)");
+            if (matches.Count < 2) return false;
+            if (!TryParseFlexibleTime(matches[0].Groups[1].Value.Trim(), out start)) return false;
+            if (!TryParseFlexibleTime(matches[1].Groups[1].Value.Trim(), out end)) return false;
+            if (end < start)
+            {
+                // assume same evening range; bump end by 12h if missing am/pm
+                end = end.Add(TimeSpan.FromHours(12));
+            }
+            return true;
+        }
+
+        private static bool TryParseFlexibleTime(string input, out TimeSpan time)
+        {
+            time = default;
+            var m = Regex.Match(input, @"^(?<h>\d{1,2})(:(?<m>\d{2}))?\s?(?<ampm>am|pm)?$");
+            if (!m.Success) return false;
+            var h = int.Parse(m.Groups["h"].Value);
+            var mm = m.Groups["m"].Success ? int.Parse(m.Groups["m"].Value) : 0;
+            var ampm = m.Groups["ampm"].Value;
+            if (!string.IsNullOrEmpty(ampm))
+            {
+                if (ampm == "pm" && h < 12) h += 12;
+                if (ampm == "am" && h == 12) h = 0;
+            }
+            if (h < 0 || h > 23 || mm < 0 || mm > 59) return false;
+            time = new TimeSpan(h, mm, 0);
+            return true;
+        }
+
+        private static List<(string displayDate, string dateForTool)> ComputeDatesForWeekdays(List<string> days, bool thisWeek)
+        {
+            var today = DateTime.Today;
+            // start of week as Monday
+            int diff = (7 + (int)today.DayOfWeek - (int)DayOfWeek.Monday) % 7;
+            var monday = today.AddDays(-diff);
+            var baseWeek = thisWeek ? monday : monday; // for now support only this week; can extend to next week logic
+            var result = new List<(string displayDate, string dateForTool)>();
+            foreach (var dn in days)
+            {
+                var targetDow = dn switch
+                {
+                    "monday" => DayOfWeek.Monday,
+                    "tuesday" => DayOfWeek.Tuesday,
+                    "wednesday" => DayOfWeek.Wednesday,
+                    "thursday" => DayOfWeek.Thursday,
+                    "friday" => DayOfWeek.Friday,
+                    "saturday" => DayOfWeek.Saturday,
+                    _ => DayOfWeek.Sunday
+                };
+                var offset = ((int)targetDow - (int)DayOfWeek.Monday + 7) % 7;
+                var date = baseWeek.AddDays(offset);
+                // If computed date is in the past relative to today, move to the same day next week
+                if (date < today)
+                {
+                    date = date.AddDays(7);
+                }
+                result.Add((date.ToString("dddd, MMM d, yyyy"), date.ToString("dd MMM yy")));
+            }
+            return result;
+        }
+
+        private static string BuildStructuredListForMultipleDays(List<(string dateLabel, string json)> sections)
+        {
+            var lines = new List<string>();
+            for (int i = 0; i < sections.Count; i++)
+            {
+                var (dateLabel, json) = sections[i];
+                lines.Add($"Day {i + 1} — {dateLabel}");
+                var block = BuildStructuredListFromAvailability(json);
+                if (string.IsNullOrWhiteSpace(block))
+                {
+                    lines.Add("No matching courts or time slots found.");
+                }
+                else
+                {
+                    lines.Add(block);
+                }
+                if (i < sections.Count - 1)
+                {
+                    lines.Add("\n---\n");
+                }
+            }
+            return string.Join("\n", lines);
         }
     }
 }
