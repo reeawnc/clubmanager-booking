@@ -169,6 +169,7 @@ namespace Bookings.Tests
             result.Should().Contain("18:15 - 19:00");
             result.Should().NotContain("19:00 - 19:45");
             result.Should().NotContain("Court 2");
+
         }
 
         [Fact]
