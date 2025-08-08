@@ -18,5 +18,16 @@
   "extensionBundle": {
     "id": "Microsoft.Azure.Functions.ExtensionBundle",
     "version": "[4.*, 5.0.0)"
+  },
+  "extensions": {
+    "http": {
+      "routePrefix": "api",
+      "cors": {
+        "allowedOrigins": ["*"],
+        "supportCredentials": false,
+        "allowedMethods": ["GET", "POST", "OPTIONS"],
+        "allowedHeaders": ["Content-Type"]
+      }
+    }
   }
 }

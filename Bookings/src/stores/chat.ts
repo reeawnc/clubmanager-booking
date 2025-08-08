@@ -66,57 +66,60 @@ export const useChatStore = defineStore('chat', () => {
       // For local development, call the Azure Functions directly
       // For production (Azure Static Web Apps), this would be '/api/PromptFunction'
       const apiUrl = import.meta.env.DEV 
-        ? 'http://localhost:7071/api/PromptFunction'  // Local development
-        : '/api/PromptFunction';  // Production (Azure Static Web Apps)
-      
-      const response = await fetch(apiUrl, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          prompt,
-          userId: 'testuser123',
-          sessionId: sessionId.value || 'testsession456'
-        }),
-      })
+        ? 'http://localhost:7071/api/PromptFunction/stream'  // Local streaming endpoint
+        : '/api/PromptFunction/stream';  // Production streaming
 
-      if (!response.ok) {
+      let response: Response
+      try {
+        response = await fetch(apiUrl, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            prompt,
+            userId: 'testuser123',
+            sessionId: sessionId.value || 'testsession456'
+          }),
+        })
+      } catch (e) {
+        const nonStreamUrl = import.meta.env.DEV ? 'http://localhost:7071/api/PromptFunction' : '/api/PromptFunction'
+        const nonStream = await fetch(nonStreamUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            prompt,
+            userId: 'testuser123',
+            sessionId: sessionId.value || 'testsession456'
+          }),
+        })
+        if (!nonStream.ok) {
+          const errText = await nonStream.text()
+          throw new Error(`HTTP error! status: ${nonStream.status}, message: ${errText}`)
+        }
+        const data = await nonStream.json()
+        updateMessage(assistantMessage.id, data.response)
+        return
+      }
+
+      if (!response.ok || !response.body) {
         const errorText = await response.text()
         console.error('API Error:', errorText)
         throw new Error(`HTTP error! status: ${response.status}, message: ${errorText}`)
       }
 
-      const data: ApiResponse = await response.json()
-      
-      if (data.success) {
-        sessionId.value = data.sessionId
-        
-        // Extract metadata from toolCalls
-        const metadata: any = {
-          toolCalls: data.toolCalls
-        }
-        
-        // Look for date information in toolCalls
-        if (data.toolCalls && Array.isArray(data.toolCalls)) {
-          data.toolCalls.forEach(toolCall => {
-            if (toolCall.parameters && toolCall.parameters.FullDate) {
-              metadata.fullDate = toolCall.parameters.FullDate
-            }
-          })
-        }
-
-        // Determine query type based on prompt content
-        if (prompt.toLowerCase().includes('availability')) {
-          metadata.queryType = 'availability'
-        } else if (prompt.toLowerCase().includes('playing') || prompt.toLowerCase().includes('who')) {
-          metadata.queryType = 'players'
-        }
-        
-        updateMessage(assistantMessage.id, data.response, metadata)
-      } else {
-        updateMessage(assistantMessage.id, `Error: ${data.errorMessage || 'Unknown error occurred'}`)
+      // Stream text/plain content and append progressively
+      const reader = response.body.getReader()
+      const decoder = new TextDecoder()
+      let partial = ''
+      while (true) {
+        const { value, done } = await reader.read()
+        if (done) break
+        partial += decoder.decode(value, { stream: true })
+        updateMessage(assistantMessage.id, partial)
       }
+      partial += decoder.decode()
+      updateMessage(assistantMessage.id, partial)
     } catch (error) {
       console.error('Error sending message:', error)
       if (error instanceof TypeError && error.message.includes('Failed to fetch')) {
