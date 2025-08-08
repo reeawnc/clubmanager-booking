@@ -125,17 +125,20 @@ namespace Bookings.Tests
             if (!TryGetClient(out var client)) { return; }
 
             // Court 1 and Court 3 have slots spanning 18:45; Court 2 has non-overlapping slots
-            var mockedJson = "{" +
-                "\n  \"Date\": \"08 Aug 25\"," +
-                "\n  \"Courts\": [" +
-                "\n    {\n      \"Name\": \"Court 1\", \n      \"CourtNumber\": \"1\", \n      \"Cells\": [ \n        { \"TimeSlot\": \"18:30 - 19:15\", \"Status\": \"booked\", \"Player\": \"Eve\", \"IsBooked\": true, \"Court\": \"Court 1\" } \n      ]\n    }," +
-                "\n    {\n      \"Name\": \"Court 2\", \n      \"CourtNumber\": \"2\", \n      \"Cells\": [ \n        { \"TimeSlot\": \"17:30 - 18:15\", \"Status\": \"booked\", \"Player\": \"Frank\", \"IsBooked\": true, \"Court\": \"Court 2\" } \n      ]\n    }," +
-                "\n    {\n      \"Name\": \"Court 3\", \n      \"CourtNumber\": \"3\", \n      \"Cells\": [ \n        { \"TimeSlot\": \"18:45 - 19:30\", \"Status\": \"available\", \"Player\": \"Available\", \"IsBooked\": false, \"Court\": \"Court 3\" } \n      ]\n    }" +
-                "\n  ]" +
-                "\n}";
+            var mockedJson = new
+            {
+                Date = "08 Aug 25",
+                Courts = new object[]
+                {
+                    new { Name = "Court 1", CourtNumber = "1", Cells = new object[] { new { TimeSlot = "18:30 - 19:15", Status = "booked", Player = "Eve", IsBooked = true, Court = "Court 1" } } },
+                    new { Name = "Court 2", CourtNumber = "2", Cells = new object[] { new { TimeSlot = "17:30 - 18:15", Status = "booked", Player = "Frank", IsBooked = true, Court = "Court 2" } } },
+                    new { Name = "Court 3", CourtNumber = "3", Cells = new object[] { new { TimeSlot = "18:45 - 19:30", Status = "available", Player = "Available", IsBooked = false, Court = "Court 3" } } }
+                }
+            };
+            var mockedJsonStr = System.Text.Json.JsonSerializer.Serialize(mockedJson);
 
             var registry = new ToolRegistry();
-            registry.RegisterTool(new MockCourtAvailabilityTool(mockedJson));
+            registry.RegisterTool(new MockCourtAvailabilityTool(mockedJsonStr));
             var agent = new CourtAvailabilityAgent(client, registry);
 
             var prompt = "Looking for 18:45 availability today";
