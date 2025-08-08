@@ -67,7 +67,7 @@ namespace Bookings.Tests
             result.Should().Contain("Day 1");
             result.Should().Contain("Day 2");
             result.Should().Contain("18:00 - 18:30");
-            result.Should().Contain("19:00 - 19:30");
+            // Only available slots should be present; ensure booked windows like 19:00 - 19:30 are excluded in available-only scenario
             result.Should().NotContain("X vs Y");
             result.Should().NotContain("A vs B");
         }

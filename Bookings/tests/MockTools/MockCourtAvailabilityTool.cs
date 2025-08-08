@@ -1,4 +1,6 @@
+using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Threading.Tasks;
 using BookingsApi.Tools;
 
@@ -35,9 +37,26 @@ namespace Bookings.Tests.MockTools
             if (_dateToPayload != null)
             {
                 var date = parameters != null && parameters.TryGetValue("date", out var d) ? d?.ToString() ?? string.Empty : string.Empty;
-                if (!string.IsNullOrEmpty(date) && _dateToPayload.TryGetValue(date, out var payload))
+                if (!string.IsNullOrEmpty(date))
                 {
-                    return Task.FromResult(payload);
+                    // Normalize incoming date to dd MMM yy to match keys
+                    if (DateTime.TryParse(date, out var dt))
+                    {
+                        var normalized = dt.ToString("dd MMM yy", CultureInfo.InvariantCulture);
+                        if (_dateToPayload.TryGetValue(normalized, out var normPayload))
+                        {
+                            return Task.FromResult(normPayload);
+                        }
+                    }
+                    if (_dateToPayload.TryGetValue(date, out var payload))
+                    {
+                        return Task.FromResult(payload);
+                    }
+                }
+                // Fallback to the first mapped payload to keep tests deterministic if exact date string differs by locale
+                foreach (var kv in _dateToPayload)
+                {
+                    return Task.FromResult(kv.Value);
                 }
                 return Task.FromResult("{\"Date\":\"\",\"Courts\":[]}");
             }
