@@ -63,11 +63,11 @@ export const useChatStore = defineStore('chat', () => {
     isLoading.value = true
 
     try {
-      // For local development, call the Azure Functions directly
-      // For production (Azure Static Web Apps), this would be '/api/PromptFunction'
-      const apiUrl = import.meta.env.DEV 
-        ? 'http://localhost:7071/api/PromptFunction/stream'  // Local streaming endpoint
-        : '/api/PromptFunction/stream';  // Production streaming
+      // Toggle streaming via env. Default: non-stream in dev to avoid CORS pain.
+      const useStream = (import.meta as any).env?.VITE_USE_STREAM === 'true'
+      const apiUrl = useStream
+        ? (import.meta.env.DEV ? 'http://localhost:7071/api/PromptFunction/stream' : '/api/PromptFunction/stream')
+        : (import.meta.env.DEV ? 'http://localhost:7071/api/PromptFunction' : '/api/PromptFunction')
 
       let response: Response
       try {
@@ -83,6 +83,7 @@ export const useChatStore = defineStore('chat', () => {
           }),
         })
       } catch (e) {
+        // Hard fallback on network error
         const nonStreamUrl = import.meta.env.DEV ? 'http://localhost:7071/api/PromptFunction' : '/api/PromptFunction'
         const nonStream = await fetch(nonStreamUrl, {
           method: 'POST',
@@ -97,29 +98,39 @@ export const useChatStore = defineStore('chat', () => {
           const errText = await nonStream.text()
           throw new Error(`HTTP error! status: ${nonStream.status}, message: ${errText}`)
         }
-        const data = await nonStream.json()
+        const data: any = await nonStream.json()
         updateMessage(assistantMessage.id, data.response)
         return
       }
 
-      if (!response.ok || !response.body) {
+      if (!response.ok) {
         const errorText = await response.text()
         console.error('API Error:', errorText)
         throw new Error(`HTTP error! status: ${response.status}, message: ${errorText}`)
       }
 
-      // Stream text/plain content and append progressively
-      const reader = response.body.getReader()
-      const decoder = new TextDecoder()
-      let partial = ''
-      while (true) {
-        const { value, done } = await reader.read()
-        if (done) break
-        partial += decoder.decode(value, { stream: true })
+      // If using stream, read progressively; otherwise parse JSON
+      if (useStream) {
+        if (!response.body) {
+          const text = await response.text()
+          updateMessage(assistantMessage.id, text)
+          return
+        }
+        const reader = response.body.getReader()
+        const decoder = new TextDecoder()
+        let partial = ''
+        while (true) {
+          const { value, done } = await reader.read()
+          if (done) break
+          partial += decoder.decode(value, { stream: true })
+          updateMessage(assistantMessage.id, partial)
+        }
+        partial += decoder.decode()
         updateMessage(assistantMessage.id, partial)
+      } else {
+        const data: any = await response.json()
+        updateMessage(assistantMessage.id, data.response)
       }
-      partial += decoder.decode()
-      updateMessage(assistantMessage.id, partial)
     } catch (error) {
       console.error('Error sending message:', error)
       if (error instanceof TypeError && error.message.includes('Failed to fetch')) {

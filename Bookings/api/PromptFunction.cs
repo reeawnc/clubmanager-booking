@@ -217,5 +217,54 @@ namespace BookingsApi
                 return outerErrorResponse;
             }
         }
+
+        [Function("PromptFunctionStream")] 
+        public async Task<HttpResponseData> RunStream(
+            [HttpTrigger(AuthorizationLevel.Anonymous, "post", "options", Route = "PromptFunction/stream")] HttpRequestData req,
+            FunctionContext context)
+        {
+            var logger = context.GetLogger("PromptFunctionStream");
+            if (req.Method == "OPTIONS")
+            {
+                var cors = req.CreateResponse(HttpStatusCode.OK);
+                cors.Headers.Add("Access-Control-Allow-Origin", "*");
+                cors.Headers.Add("Access-Control-Allow-Methods", "POST, OPTIONS");
+                cors.Headers.Add("Access-Control-Allow-Headers", "Content-Type");
+                return cors;
+            }
+
+            try
+            {
+                using var reader = new StreamReader(req.Body);
+                var body = await reader.ReadToEndAsync();
+                var promptRequest = JsonSerializer.Deserialize<PromptRequest>(body, new JsonSerializerOptions{ PropertyNameCaseInsensitive = true });
+                if (promptRequest == null || string.IsNullOrEmpty(promptRequest.Prompt))
+                {
+                    var bad = req.CreateResponse(HttpStatusCode.BadRequest);
+                    bad.Headers.Add("Access-Control-Allow-Origin", "*");
+                    await bad.WriteStringAsync("Invalid request: Prompt is required");
+                    return bad;
+                }
+
+                // For first iteration, stream the final response once computed
+                // Future: implement true token streaming via SDK streaming APIs
+                var full = await _primaryAgent.HandleAsync(promptRequest.Prompt, promptRequest.UserId, promptRequest.SessionId);
+
+                var res = req.CreateResponse(HttpStatusCode.OK);
+                res.Headers.Add("Access-Control-Allow-Origin", "*");
+                res.Headers.Add("Access-Control-Allow-Methods", "POST, OPTIONS");
+                res.Headers.Add("Access-Control-Allow-Headers", "Content-Type");
+                res.Headers.Add("Content-Type", "text/plain");
+                await res.WriteStringAsync(full);
+                return res;
+            }
+            catch (Exception ex)
+            {
+                var errorResponse = req.CreateResponse(HttpStatusCode.InternalServerError);
+                errorResponse.Headers.Add("Access-Control-Allow-Origin", "*");
+                await errorResponse.WriteStringAsync($"Streaming error: {ex.Message}");
+                return errorResponse;
+            }
+        }
     }
 }
