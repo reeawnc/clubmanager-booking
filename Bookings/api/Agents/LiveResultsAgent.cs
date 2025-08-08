@@ -1,6 +1,7 @@
 using System;
 using System.Linq;
 using System.Text;
+using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using BookingsApi.Services;
 
@@ -24,6 +25,21 @@ namespace BookingsApi.Agents
             var group = Models.BoxGroupType.SummerFriendlies;
             if (lower.Contains("club")) group = Models.BoxGroupType.Club;
 
+            // Optional box filter e.g. "Box A1"
+            string? requestedBox = null;
+            var m = Regex.Match(lower, @"box\s*[a-z]\s*\d+", RegexOptions.IgnoreCase);
+            if (m.Success)
+            {
+                var raw = m.Value.Trim();
+                var cleaned = Regex.Replace(raw, @"\s+", " ").ToLowerInvariant();
+                if (cleaned.StartsWith("box ") && cleaned.Length >= 6)
+                {
+                    var letter = char.ToUpperInvariant(cleaned[4]);
+                    var numberPart = cleaned.Substring(5).Replace(" ", "");
+                    requestedBox = $"Box {letter}{numberPart}";
+                }
+            }
+
             var data = await _resultsService.GetBoxResultsAsync(group);
             if (data?.Boxes == null || data.Boxes.Count == 0)
             {
@@ -35,12 +51,20 @@ namespace BookingsApi.Agents
 
             foreach (var box in data.Boxes)
             {
+                if (!string.IsNullOrEmpty(requestedBox))
+                {
+                    var normalizedName = Regex.Replace(box.Name ?? string.Empty, @"\s+", " ");
+                    if (!normalizedName.Equals(requestedBox, StringComparison.OrdinalIgnoreCase))
+                    {
+                        continue;
+                    }
+                }
                 if (box.Results == null || box.Results.Count == 0) continue;
-                var ordered = box.Results
+                var orderedAll = box.Results
                     .OrderByDescending(r => r.Date)
                     .ThenByDescending(r => r.MatchID)
-                    .Take(10)
                     .ToList();
+                var ordered = string.IsNullOrEmpty(requestedBox) ? orderedAll.Take(10).ToList() : orderedAll;
 
                 sb.AppendLine($"\n### {box.Name}");
                 int i = 1;
@@ -57,6 +81,10 @@ namespace BookingsApi.Agents
                     }
                     sb.AppendLine($"{i}. {r.P1} vs. {r.P2}\n- Score: {score}\n- Date: {date}\n- Winner: {winner}");
                     i++;
+                }
+                if (string.IsNullOrEmpty(requestedBox) && orderedAll.Count > ordered.Count)
+                {
+                    sb.AppendLine($"… and {orderedAll.Count - ordered.Count} more");
                 }
             }
 
