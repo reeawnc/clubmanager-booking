@@ -63,8 +63,8 @@ export const useChatStore = defineStore('chat', () => {
     isLoading.value = true
 
     try {
-      // Toggle streaming via env. Default: non-stream in dev to avoid CORS pain.
-      const useStream = (import.meta as any).env?.VITE_USE_STREAM === 'true'
+      // Toggle streaming via env. Default: true if not specified.
+      const useStream = ((import.meta as any).env?.VITE_USE_STREAM ?? 'true') === 'true'
       const apiUrl = useStream
         ? (import.meta.env.DEV ? 'http://localhost:7071/api/PromptFunction/stream' : '/api/PromptFunction/stream')
         : (import.meta.env.DEV ? 'http://localhost:7071/api/PromptFunction' : '/api/PromptFunction')
