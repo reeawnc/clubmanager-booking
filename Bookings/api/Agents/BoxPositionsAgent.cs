@@ -42,9 +42,9 @@ When formatting the answer (after the tool returns JSON):
   - Replace any source 'Pos' header with 'Rank'.
   - Right‑align numeric columns and left‑align text columns using GFM alignment markers in the header separator row.
   - Ensure the Player column has a minimum width for alignment: compute the width as max(26, longest displayed player name) and pad shorter names with spaces (do not truncate). This keeps numeric columns vertically aligned even when names vary in length.
-  - Do not include any ASCII separators from the source.
+  - Do not include any extra ASCII grid lines; each row must be exactly `| col | col | ... |` with spaces, nothing more.
   - Preserve the existing ranking order; do not sort.
-  - Limit to the TOP 10 rows only; if more exist, add an italic line under the table: '*+N more players*'.
+  - Include ALL rows (no top-10 truncation). If the source had an '… and N more' marker, ignore it and print all rows provided in the JSON.
 - Trim excess spaces in names. Keep original capitalisation unless the whole name is lowercase, then use Title Case.
 - Bold the entire row for player name matching 'R Cunniffe' (case‑insensitive) by bolding each cell in that row.
 - Do not calculate totals; if W/D/L are missing, leave them blank.
@@ -75,7 +75,7 @@ When formatting the answer (after the tool returns JSON):
                             var followUp = new List<ChatMessage>
                             {
                                 new SystemChatMessage(@"You will receive JSON containing box league positions. Convert it into ONE ```markdown fenced block containing multiple sections:
-For each box: '### Box <name>' and a GFM table with headers: Rank | Player | Pld | W | D | L | Pts. Use alignment markers to right‑align numbers and left‑align text. Pad the Player column to a minimum width of 26 characters or the longest displayed name, whichever is larger (do not truncate), so numeric columns stay aligned. Keep rank order, limit to top 10, and if more rows exist add an italic '*+N more players*' line under the table. Trim extra spaces in names; if a name is all lowercase, title case it. Bold the entire row for player name 'R Cunniffe' (case‑insensitive) by bolding each cell. Do NOT compute missing stats; leave W/D/L blank if absent. Return only the fenced Markdown block."),
+For each box: '### Box <name>' and a GFM table with headers: Rank | Player | Pld | W | D | L | Pts. Use alignment markers to right‑align numbers and left‑align text. Pad the Player column to a minimum width of 32 characters or the longest displayed name, whichever is larger (do not truncate), so numeric columns stay aligned. Do not output extra ASCII grid lines (no repeated dashes/vertical rules beyond the single header separator). Keep rank order and include ALL rows (no truncation). Trim extra spaces in names; if a name is all lowercase, title case it. Bold the entire row for player name 'R Cunniffe' (case‑insensitive) by bolding each cell. Do NOT compute missing stats; leave W/D/L blank if absent. Return only the fenced Markdown block."),
                                 new UserChatMessage($"Box positions JSON: {toolResult}")
                             };
                             var final = await _chatClient.CompleteChatAsync(followUp);
