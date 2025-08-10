@@ -109,7 +109,16 @@ namespace BookingsApi.Agents
             var json = JsonSerializer.Serialize(boxesOut);
             var messages = new List<ChatMessage>
             {
-                new SystemChatMessage("You format squash box results. Show only played matches. For each box: heading '### <Box Name>' then a numbered list 'Player1 vs Player2 — Score S1–S2 — Date YYYY-MM-DD — Winner: Name'. Keep it concise; return plain text, no JSON."),
+                new SystemChatMessage(
+                    "You will be given played squash match results as JSON. Reformat into a compact, mobile-friendly card list with these rules:\n\n" +
+                    "- Keep the match order exactly as given.\n" +
+                    "- Each match outputs TWO lines, followed by a blank line.\n" +
+                    "- Line 1: #<matchNumber> <Player1> vs <Player2> — bold the winner’s name (no emoji).\n" +
+                    "- Line 2: Score: <S1–S2> | Date: <YYYY-MM-DD>. Use an en dash between numbers.\n" +
+                    "- Remove the word 'Winner' entirely — bolding and the trophy are the only indicators.\n" +
+                    "- Keep names exactly as given (including apostrophes, capitals, numerals).\n" +
+                    "- Keep spacing consistent: one space on each side of 'vs' and around pipes.\n" +
+                    "- Output Markdown without code fences. No extra commentary. No extra headings unless the input already provides a heading to preserve.\n"),
                 new UserChatMessage($"Group: {group}. Data: {json}")
             };
             var completion = await _chatClient.CompleteChatAsync(messages, new ChatCompletionOptions { Temperature = 0.1f, MaxOutputTokenCount = 600 });
