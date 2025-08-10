@@ -102,6 +102,11 @@ namespace BookingsApi.Agents
             {
                 sections.Add((currentStart, lines.Length - 1));
             }
+            // Fallback: if no explicit box headings were found, treat the entire content as one section
+            if (sections.Count == 0 && lines.Length > 0)
+            {
+                sections.Add((0, lines.Length - 1));
+            }
 
             var rankRegex = new Regex("^\\s*(?:[\\uD83E\\uDD47\\uD83E\\uDD48\\uD83E\\uDD49\\uD83E\\uDD72]\\s*)?#\\s*(?<r>\\d+)", RegexOptions.Compiled);
             string gold = "\uD83E\uDD47";   // 🥇
@@ -112,11 +117,19 @@ namespace BookingsApi.Agents
             foreach (var (start, end) in sections)
             {
                 var rankLineIndexes = new List<int>();
+                var cardNameLineIndexes = new List<int>();
+                var statsRegex = new Regex(@"^\s*\d+\s*pts\s*\|\s*\d+\s*-\s*\d+\s*$", RegexOptions.IgnoreCase | RegexOptions.Compiled);
                 for (int i = start + 1; i <= end; i++)
                 {
                     if (rankRegex.IsMatch(lines[i]))
                     {
                         rankLineIndexes.Add(i);
+                    }
+                    // Card view: identify name line followed by stats line
+                    if (i + 1 <= end && statsRegex.IsMatch(lines[i + 1]))
+                    {
+                        cardNameLineIndexes.Add(i);
+                        i++; // skip the stats line in this pass
                     }
                 }
                 if (rankLineIndexes.Count == 0) continue;
@@ -141,13 +154,39 @@ namespace BookingsApi.Agents
                 // Last place emoji on last rank line
                 int lastIdx = rankLineIndexes[rankLineIndexes.Count - 1];
                 lines[lastIdx] = PrependIfMissing(lines[lastIdx], lastEmoji, blockMedals: true);
+
+                // Also handle card view (name + stats) when ranks are not present on every line
+                if (cardNameLineIndexes.Count > 0)
+                {
+                    // Strip clown from all card name lines first
+                    for (int k = 0; k < cardNameLineIndexes.Count; k++)
+                    {
+                        var li = cardNameLineIndexes[k];
+                        lines[li] = StripLeadingSpecificEmoji(lines[li], lastEmoji);
+                    }
+                    // Apply clown to the final card's name line
+                    var lastCardIdx = cardNameLineIndexes[cardNameLineIndexes.Count - 1];
+                    lines[lastCardIdx] = PrependIfMissing(lines[lastCardIdx], lastEmoji, blockMedals: true);
+                }
             }
 
-            // Highlight R Cunniffe with fire inside bold
+            // Highlight R Cunniffe with a single fire emoji (works with or without bold)
             for (int i = 0; i < lines.Length; i++)
             {
-                // Ensure exactly one fire emoji after the name inside bold, case-insensitive match for the name
-                lines[i] = Regex.Replace(lines[i], @"\*\*(?i:R Cunniffe)\*\*", m => "**" + m.Value.Substring(2, m.Value.Length - 4) + "\uD83D\uDD25**");
+                // Bolded form
+                lines[i] = Regex.Replace(
+                    lines[i],
+                    @"\*\*(?i:R Cunniffe)\*\*",
+                    m =>
+                    {
+                        var nameOnly = m.Value.Substring(2, m.Value.Length - 4);
+                        return "**" + nameOnly + "\uD83D\uDD25**";
+                    });
+                // Plain form (ensure not already followed by fire)
+                lines[i] = Regex.Replace(
+                    lines[i],
+                    @"(?i)\bR Cunniffe\b(?!\uD83D\uDD25)",
+                    m => m.Value + "\uD83D\uDD25");
                 // Deduplicate any accidental double fire
                 lines[i] = lines[i].Replace("\uD83D\uDD25\uD83D\uDD25", "\uD83D\uDD25");
             }
@@ -182,6 +221,19 @@ namespace BookingsApi.Agents
             if (m.Success)
             {
                 return line.Substring(0, m.Groups[1].Length) + line.Substring(m.Length);
+            }
+            return line;
+        }
+
+        private static string StripLeadingSpecificEmoji(string line, string emoji)
+        {
+            var trimmed = line.TrimStart();
+            if (trimmed.StartsWith(emoji + " "))
+            {
+                // Remove exactly one leading emoji and a space
+                int indentLen = line.Length - trimmed.Length;
+                var indent = indentLen > 0 ? line.Substring(0, indentLen) : string.Empty;
+                return indent + trimmed.Substring(emoji.Length + 1);
             }
             return line;
         }
