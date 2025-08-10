@@ -65,12 +65,8 @@ namespace BookingsApi.Agents
                     "- No draws: ignore D for display.\n" +
                     "- Text only. No commentary, no code fences, no extra headers, no trailing spaces.\n" +
                     "- Exactly one blank line between cards; no extra blank lines at start or end.\n\n" +
-                    "Optional modifiers (defaults):\n" +
-                    "- use_medals=true: For each box independently, prefix ONLY ranks 1, 2, and 3 in that box with medal emojis (\uD83E\uDD47, \uD83E\uDD48, \uD83E\uDD49) while still showing numeric rank, e.g., \"\uD83E\uDD47 #1\". Do not add medals to any other ranks. To disable medals, set use_medals=false.\n" +
-                    "- last_place_emoji=\"\uD83E\uDD21\": If non-empty, for each box independently, prefix ONLY the single last-ranked player in that box with this emoji while still showing numeric rank (e.g., \uD83E\uDD21 #12). Do not apply to any other ranks. Set to empty string to disable.\n" +
-                    "- highlight_name=\"\": If provided and matches a player name exactly (case-insensitive), append \uD83D\uDD25 immediately after the name inside the bold markers, e.g., **R Cunniffe\uD83D\uDD25**.\n\n" +
                     "If multiple boxes are present, output a minimal markdown heading before each group: '### Box <name>' on its own line, then a blank line, then that box's cards. Maintain exactly one blank line between cards. No trailing blank lines at the end.\n\n" +
-                    "Emoji placement rules (MANDATORY): For every box, if use_medals=true then prefix rank 1 with \uD83E\uDD47, rank 2 with \uD83E\uDD48, and rank 3 with \uD83E\uDD49. If last_place_emoji is non-empty, prefix ONLY the lowest rank in that box with that emoji. Do not omit silver or bronze. Do not place emojis on any other ranks."),
+                    "Do NOT add emojis or icons; output plain text only. Decoration is applied after formatting."),
                 new UserChatMessage($"User settings: {prompt}\n\nBox positions JSON: {toolResultJson}")
             };
             var finalResponse = await _chatClient.CompleteChatAsync(formatMessages);
@@ -118,7 +114,8 @@ namespace BookingsApi.Agents
             {
                 var rankLineIndexes = new List<int>();
                 var cardNameLineIndexes = new List<int>();
-                var statsRegex = new Regex(@"^\s*\d+\s*pts\s*\|\s*\d+\s*-\s*\d+\s*$", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+                // Match both "pts" and singular "pt"
+                var statsRegex = new Regex(@"^\s*\d+\s*p(?:t|ts)\s*\|\s*\d+\s*-\s*\d+\s*$", RegexOptions.IgnoreCase | RegexOptions.Compiled);
                 for (int i = start + 1; i <= end; i++)
                 {
                     if (rankRegex.IsMatch(lines[i]))

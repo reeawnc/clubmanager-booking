@@ -69,14 +69,70 @@ namespace Bookings.Tests
             // Assert medals in each box (🥇, 🥈, 🥉) and last-place emoji (🥲)
             // Box A1
             result.Should().MatchRegex(@"(?s)### Box A1.*\uD83E\uDD47\s*#?1.*\uD83E\uDD48\s*#?2.*\uD83E\uDD49\s*#?3");
-            result.Should().MatchRegex(@"(?s)### Box A1.*\uD83E\uDD72\s*#?6");
+            result.Should().MatchRegex(@"(?s)### Box A1.*\uD83E\uDD21\s*#?6");
 
             // Box A2
             result.Should().MatchRegex(@"(?s)### Box A2.*\uD83E\uDD47\s*#?1.*\uD83E\uDD48\s*#?2.*\uD83E\uDD49\s*#?3");
-            result.Should().MatchRegex(@"(?s)### Box A2.*\uD83E\uDD72\s*#?6");
+            result.Should().MatchRegex(@"(?s)### Box A2.*\uD83E\uDD21\s*#?6");
 
             // Highlight R Cunniffe with fire
             result.Should().Contain("**R Cunniffe\uD83D\uDD25**");
+        }
+
+        [Fact]
+        public async Task SingleBox_CardView_LastPlaceClown_And_Top3Medals_NoDuplicates()
+        {
+            if (!TryGetClient(out var client)) { return; }
+
+            var json = JsonSerializer.Serialize(new
+            {
+                Boxes = new object[]
+                {
+                    new { Name = "Box A1", Positions = new object[]
+                        {
+                            new { Pos = 1, Plyr = "One", Pts = 30, W = 6, L = 0, Pld = 6 },
+                            new { Pos = 2, Plyr = "Two", Pts = 25, W = 5, L = 1, Pld = 6 },
+                            new { Pos = 3, Plyr = "Three", Pts = 20, W = 4, L = 2, Pld = 6 },
+                            new { Pos = 4, Plyr = "R Cunniffe", Pts = 15, W = 3, L = 3, Pld = 6 },
+                            // Use 1 point to produce singular '1pt' and exercise the stats-line detector
+                            new { Pos = 5, Plyr = "Five", Pts = 1, W = 0, L = 1, Pld = 1 }
+                        }
+                    }
+                }
+            });
+
+            var registry = new ToolRegistry();
+            registry.RegisterTool(new MockBoxPositionsTool(json));
+            var agent = new BoxPositionsAgent(client, registry);
+
+            var result = await agent.HandleAsync("Show current box positions for SummerFriendlies for Box A1");
+
+            // Top 3 medals appear exactly once each at the correct ranks
+            result.Should().MatchRegex(@"(?m)^\s*\uD83E\uDD47\s*#?1\b");
+            result.Should().MatchRegex(@"(?m)^\s*\uD83E\uDD48\s*#?2\b");
+            result.Should().MatchRegex(@"(?m)^\s*\uD83E\uDD49\s*#?3\b");
+            // No medals on rank 4 or 5
+            result.Should().NotMatchRegex(@"(?m)^\s*[\uD83E\uDD47\uD83E\uDD48\uD83E\uDD49]\s*#?4\b");
+            result.Should().NotMatchRegex(@"(?m)^\s*[\uD83E\uDD47\uD83E\uDD48\uD83E\uDD49]\s*#?5\b");
+
+            // Last place clown appears exactly once and on the last player's name line
+            result.Should().MatchRegex(@"(?m)^\s*\uD83E\uDD21\s*#?5\b");
+
+            // R Cunniffe has exactly one fire (accept bold or plain)
+            (result.Contains("**R Cunniffe\uD83D\uDD25**") || result.Contains("R Cunniffe\uD83D\uDD25")).Should().BeTrue();
+            result.Contains("\uD83D\uDD25\uD83D\uDD25").Should().BeFalse();
+        }
+
+        private static int CountOccur(string haystack, string needle)
+        {
+            int count = 0, idx = 0;
+            while (true)
+            {
+                idx = haystack.IndexOf(needle, idx, StringComparison.Ordinal);
+                if (idx < 0) break;
+                count++; idx += needle.Length;
+            }
+            return count;
         }
     }
 }
