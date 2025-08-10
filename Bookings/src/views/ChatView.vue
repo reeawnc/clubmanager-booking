@@ -132,9 +132,9 @@ const CATEGORY_PROMPTS: Record<string, { id: number; text: string }[]> = {
     { id: 33, text: 'Search my messages for “league”' },
   ],
   boxpositions: [
-    { id: 40, text: 'Show current box positions for Club' },
-    { id: 41, text: 'Show current box positions for SummerFriendlies' },
-    { id: 42, text: 'Summarize top 3 in each box for SummerFriendlies' },
+    { id: 40, text: 'Show current box positions for Club Box A1' },
+    { id: 41, text: 'Show current box positions for SummerFriendlies for Box A1' },
+    { id: 42, text: 'Summarize top 5 in each box for SummerFriendlies' },
   ],
   liveresults: [
     { id: 50, text: 'Live results: Show current SummerFriendlies match results' },

@@ -1,18 +1,7 @@
 <template>
   <div class="message" :class="{ 'user-message': message.isUser, 'assistant-message': !message.isUser }">
     <div class="message-content">
-      <div class="message-avatar">
-        <div v-if="message.isUser" class="user-avatar">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-            <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/>
-          </svg>
-        </div>
-        <div v-else class="assistant-avatar">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-            <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
-          </svg>
-        </div>
-      </div>
+      <!-- Avatars removed for a cleaner UI -->
       
       <div class="message-body">
         <div class="message-text">
@@ -85,7 +74,7 @@ const formatDate = (dateString: string) => {
 }
 
 const formatMessage = (content: string) => {
-  // Simple, robust markdown-like formatting
+  // Simple, robust formatting. Preserve any returned HTML (tables) from the LLM.
   let formatted = content
   
   // Headers with subtle styling
@@ -104,11 +93,13 @@ const formatMessage = (content: string) => {
     return `<span class="time-slot">${time}: ${icon} ${description}</span>`
   })
   
-  // Line breaks
-  formatted = formatted.replace(/\n/g, '<br>')
-  
-  // Code blocks
+  // Code blocks first (preserve whitespace monospacing)
   formatted = formatted.replace(/```(.*?)```/gs, '<pre><code>$1</code></pre>')
+  
+  // Line breaks: avoid injecting <br> inside <pre> or table HTML
+  if (!/(<table|<tr|<td|<th|<pre)/i.test(formatted)) {
+    formatted = formatted.replace(/\n/g, '<br>')
+  }
   formatted = formatted.replace(/`(.*?)`/g, '<code>$1</code>')
   
   return formatted
@@ -126,26 +117,7 @@ const formatMessage = (content: string) => {
   align-items: flex-start;
 }
 
-.message-avatar {
-  flex-shrink: 0;
-  width: 32px;
-  height: 32px;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  margin-top: 2px;
-}
-
-.user-avatar {
-  background: #10a37f;
-  color: white;
-}
-
-.assistant-avatar {
-  background: #30363d; /* Darker cursor theme color */
-  color: #e6edf3;
-}
+/* Avatars removed */
 
 .message-body {
   flex: 1;
@@ -175,6 +147,26 @@ const formatMessage = (content: string) => {
 .message-content-text {
   line-height: 1.6;
   word-wrap: break-word;
+}
+
+/* Ensure LLM-sent tables render nicely and do not get overridden */
+.message-content-text :deep(table) {
+  width: 100%;
+  border-collapse: collapse;
+}
+.message-content-text :deep(th),
+.message-content-text :deep(td) {
+  padding: 8px 10px;
+}
+.message-content-text :deep(th) {
+  text-align: left;
+}
+.message-content-text :deep(td[align='right']),
+.message-content-text :deep(th[align='right']) {
+  text-align: right;
+}
+.message-content-text :deep(.table-scroll) {
+  overflow-x: auto;
 }
 
 .message-content-text :deep(h1),

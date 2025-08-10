@@ -34,12 +34,13 @@ When calling the tool:
 - If the user mentions a named group (e.g., 'Club', 'SummerFriendlies'), pass it as 'group'.
 - If they provide a numeric group id, pass it as 'groupId'.
 
-When formatting the answer:
-- Use clear sections per box with '### Box <Name>' headings.
-- Show the TOP 10 rows only by default for readability; if more, end with '… and N more'.
-- For each row print: '<rank>. <Player> — Pld <Pld>, Pts <Pts>'.
-- Include a one-line summary at the top: 'Showing current positions for <Group>'.
-- Keep it concise and readable for humans; avoid walls of text.
+When formatting the answer (after the tool returns JSON):
+- Produce a compact, plain-text table for each box using a fixed-width (monospace) layout inside a SINGLE triple‑backtick code block.
+- Start with the line: 'Showing current positions'.
+- For each box, print a centered caption like: 'Box A1', then a header row: 'Pos  Player                         Pld  Pts'.
+- Align numeric columns right; pad with spaces to align columns.
+- Limit to the TOP 10 rows only; if more rows exist add a line '… and N more' after the table for that box.
+- Keep to text only (no HTML). One code block wrapping all boxes is fine.
 "),
                 new UserChatMessage(prompt)
             };
@@ -62,17 +63,12 @@ When formatting the answer:
                         {
                             var parameters = JsonSerializer.Deserialize<Dictionary<string, object>>(functionCall.FunctionArguments) ?? new();
                             var toolResult = await tool.ExecuteAsync(parameters);
-                            // Deterministic formatting to avoid raw JSON appearing in UI
-                            var formatted = TryFormatBoxPositions(toolResult);
-                            if (!string.IsNullOrWhiteSpace(formatted))
-                            {
-                                return formatted!;
-                            }
 
-                            // Fallback to an LLM formatting attempt if parsing failed
+                            // Ask the LLM to format into a single plain-text monospaced table in a code block
                             var followUp = new List<ChatMessage>
                             {
-                                new SystemChatMessage("Format the following JSON positions into human-readable text with: headings per box, top 10 rows, and '… and N more'. NEVER return JSON or a code block; return plain text only."),
+                                new SystemChatMessage(@"You will receive JSON containing box league positions.
+Transform it into a plain-text, fixed-width table inside one triple‑backtick code block. Include per-box captions, a header row, right-aligned numeric columns, and only the top 10 rows with an '… and N more' line if applicable. Do not return HTML; return only one code block of text."),
                                 new UserChatMessage($"Box positions JSON: {toolResult}")
                             };
                             var final = await _chatClient.CompleteChatAsync(followUp);
@@ -85,55 +81,8 @@ When formatting the answer:
             return response.Value.Content[0].Text ?? "Unable to retrieve box positions right now.";
         }
 
-        private static string? TryFormatBoxPositions(string json)
-        {
-            try
-            {
-                using var doc = JsonDocument.Parse(json);
-                var root = doc.RootElement;
-                if (!root.TryGetProperty("Boxes", out var boxes) || boxes.ValueKind != JsonValueKind.Array)
-                {
-                    return null;
-                }
-
-                var sb = new StringBuilder();
-                sb.AppendLine("Showing current positions");
-
-                foreach (var box in boxes.EnumerateArray())
-                {
-                    var name = box.TryGetProperty("Name", out var n) ? n.GetString() : "Box";
-                    sb.AppendLine($"\n### {name}");
-
-                    if (!box.TryGetProperty("Positions", out var positions) || positions.ValueKind != JsonValueKind.Array)
-                    {
-                        continue;
-                    }
-
-                    int count = 0;
-                    int total = positions.GetArrayLength();
-                    foreach (var pos in positions.EnumerateArray())
-                    {
-                        if (count >= 10) break;
-                        var rank = pos.TryGetProperty("Pos", out var pPos) ? pPos.GetInt32() : count + 1;
-                        var player = pos.TryGetProperty("Plyr", out var pPlyr) ? pPlyr.GetString() : "Unknown";
-                        var played = pos.TryGetProperty("Pld", out var pPld) ? SafeGetInt(pPld) : 0;
-                        var points = pos.TryGetProperty("Pts", out var pPts) ? SafeGetInt(pPts) : 0;
-                        sb.AppendLine($"{rank}. {player} — Pld {played}, Pts {points}");
-                        count++;
-                    }
-                    if (total > count)
-                    {
-                        sb.AppendLine($"… and {total - count} more");
-                    }
-                }
-
-                return sb.ToString().TrimEnd();
-            }
-            catch
-            {
-                return null;
-            }
-        }
+        // Retained for reference; no longer used because the LLM now formats the output as HTML tables.
+        private static string? TryFormatBoxPositions(string json) => null;
 
         private static int SafeGetInt(JsonElement element)
         {
