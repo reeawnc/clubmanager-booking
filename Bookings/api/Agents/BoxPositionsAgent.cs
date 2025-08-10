@@ -6,6 +6,7 @@ using System.Text.Json;
 using System.Threading.Tasks;
 using BookingsApi.Tools;
 using System.Text;
+using System.Text.RegularExpressions;
 
 namespace BookingsApi.Agents
 {
@@ -22,6 +23,13 @@ namespace BookingsApi.Agents
             _chatClient = openAIClient?.GetChatClient("gpt-4o-mini") ?? throw new ArgumentNullException(nameof(openAIClient));
             _toolRegistry = new ToolRegistry();
             _toolRegistry.RegisterTool(new GetBoxPositionsTool());
+        }
+
+        // Test-only: allow injecting a custom tool registry (e.g., with a mocked get_box_positions tool)
+        public BoxPositionsAgent(OpenAIClient openAIClient, ToolRegistry customRegistry)
+        {
+            _chatClient = openAIClient?.GetChatClient("gpt-4o-mini") ?? throw new ArgumentNullException(nameof(openAIClient));
+            _toolRegistry = customRegistry ?? new ToolRegistry();
         }
 
         public async Task<string> HandleAsync(string prompt, string? userId = null, string? sessionId = null)
@@ -58,17 +66,125 @@ namespace BookingsApi.Agents
                     "- Text only. No commentary, no code fences, no extra headers, no trailing spaces.\n" +
                     "- Exactly one blank line between cards; no extra blank lines at start or end.\n\n" +
                     "Optional modifiers (defaults):\n" +
-                    "- use_medals=false: If true, prefix rank with the medal emoji for top 3 (\U0001F947, \U0001F948, \U0001F949) while still showing numeric rank, e.g., \"\U0001F947 #1\".\n" +
-                    "- highlight_name=\"\": If provided and matches a player name exactly (case-insensitive), append \U0001F525 immediately after the name inside the bold markers, e.g., **R Cunniffe\U0001F525**.\n\n" +
-                    "If multiple boxes are present, output a minimal markdown heading before each group: '### Box <name>' on its own line, then a blank line, then that box's cards. Maintain exactly one blank line between cards. No trailing blank lines at the end."),
-                new UserChatMessage($"Box positions JSON: {toolResultJson}")
+                    "- use_medals=true: For each box independently, prefix ONLY ranks 1, 2, and 3 in that box with medal emojis (\uD83E\uDD47, \uD83E\uDD48, \uD83E\uDD49) while still showing numeric rank, e.g., \"\uD83E\uDD47 #1\". Do not add medals to any other ranks. To disable medals, set use_medals=false.\n" +
+                    "- last_place_emoji=\"\uD83E\uDD21\": If non-empty, for each box independently, prefix ONLY the single last-ranked player in that box with this emoji while still showing numeric rank (e.g., \uD83E\uDD21 #12). Do not apply to any other ranks. Set to empty string to disable.\n" +
+                    "- highlight_name=\"\": If provided and matches a player name exactly (case-insensitive), append \uD83D\uDD25 immediately after the name inside the bold markers, e.g., **R Cunniffe\uD83D\uDD25**.\n\n" +
+                    "If multiple boxes are present, output a minimal markdown heading before each group: '### Box <name>' on its own line, then a blank line, then that box's cards. Maintain exactly one blank line between cards. No trailing blank lines at the end.\n\n" +
+                    "Emoji placement rules (MANDATORY): For every box, if use_medals=true then prefix rank 1 with \uD83E\uDD47, rank 2 with \uD83E\uDD48, and rank 3 with \uD83E\uDD49. If last_place_emoji is non-empty, prefix ONLY the lowest rank in that box with that emoji. Do not omit silver or bronze. Do not place emojis on any other ranks."),
+                new UserChatMessage($"User settings: {prompt}\n\nBox positions JSON: {toolResultJson}")
             };
             var finalResponse = await _chatClient.CompleteChatAsync(formatMessages);
-            return finalResponse.Value.Content[0].Text ?? toolResultJson;
+            var raw = finalResponse.Value.Content[0].Text ?? toolResultJson;
+            return NormalizeEmojisAndHighlights(raw);
         }
 
         // Retained for reference; no longer used
         private static string? TryFormatBoxPositions(string json) => null;
+
+        private static string NormalizeEmojisAndHighlights(string input)
+        {
+            if (string.IsNullOrWhiteSpace(input)) return input;
+            var lines = input.Split('\n');
+            var sections = new List<(int start, int end)>();
+            int currentStart = -1;
+            for (int i = 0; i < lines.Length; i++)
+            {
+                if (lines[i].StartsWith("### Box "))
+                {
+                    if (currentStart != -1)
+                    {
+                        sections.Add((currentStart, i - 1));
+                    }
+                    currentStart = i;
+                }
+            }
+            if (currentStart != -1)
+            {
+                sections.Add((currentStart, lines.Length - 1));
+            }
+
+            var rankRegex = new Regex("^\\s*(?:[\\uD83E\\uDD47\\uD83E\\uDD48\\uD83E\\uDD49\\uD83E\\uDD72]\\s*)?#\\s*(?<r>\\d+)", RegexOptions.Compiled);
+            string gold = "\uD83E\uDD47";   // 🥇
+            string silver = "\uD83E\uDD48"; // 🥈
+            string bronze = "\uD83E\uDD49"; // 🥉
+            string lastEmoji = "\uD83E\uDD21"; // 🥡 clownish/funny (🥱 alt: use \uD83E\uDD2A zany)
+
+            foreach (var (start, end) in sections)
+            {
+                var rankLineIndexes = new List<int>();
+                for (int i = start + 1; i <= end; i++)
+                {
+                    if (rankRegex.IsMatch(lines[i]))
+                    {
+                        rankLineIndexes.Add(i);
+                    }
+                }
+                if (rankLineIndexes.Count == 0) continue;
+                // First, strip any pre-existing medal/last emojis from rank lines
+                for (int k = 0; k < rankLineIndexes.Count; k++)
+                {
+                    lines[rankLineIndexes[k]] = StripLeadingEmojis(lines[rankLineIndexes[k]]);
+                }
+                // Apply medals to first three lines if present
+                if (rankLineIndexes.Count >= 1)
+                {
+                    lines[rankLineIndexes[0]] = PrependIfMissing(lines[rankLineIndexes[0]], gold);
+                }
+                if (rankLineIndexes.Count >= 2)
+                {
+                    lines[rankLineIndexes[1]] = PrependIfMissing(lines[rankLineIndexes[1]], silver);
+                }
+                if (rankLineIndexes.Count >= 3)
+                {
+                    lines[rankLineIndexes[2]] = PrependIfMissing(lines[rankLineIndexes[2]], bronze);
+                }
+                // Last place emoji on last rank line
+                int lastIdx = rankLineIndexes[rankLineIndexes.Count - 1];
+                lines[lastIdx] = PrependIfMissing(lines[lastIdx], lastEmoji, blockMedals: true);
+            }
+
+            // Highlight R Cunniffe with fire inside bold
+            for (int i = 0; i < lines.Length; i++)
+            {
+                // Ensure exactly one fire emoji after the name inside bold, case-insensitive match for the name
+                lines[i] = Regex.Replace(lines[i], @"\*\*(?i:R Cunniffe)\*\*", m => "**" + m.Value.Substring(2, m.Value.Length - 4) + "\uD83D\uDD25**");
+                // Deduplicate any accidental double fire
+                lines[i] = lines[i].Replace("\uD83D\uDD25\uD83D\uDD25", "\uD83D\uDD25");
+            }
+
+            return string.Join("\n", lines);
+        }
+
+        private static string PrependIfMissing(string line, string emoji, bool blockMedals = false)
+        {
+            var trimmed = line.TrimStart();
+            // If already starts with the emoji, return
+            if (trimmed.StartsWith(emoji)) return line;
+            // If blocking medals on last place and line already has a medal, don't add last-place
+            if (blockMedals)
+            {
+                if (trimmed.StartsWith("\uD83E\uDD47") || trimmed.StartsWith("\uD83E\uDD48") || trimmed.StartsWith("\uD83E\uDD49"))
+                {
+                    return line;
+                }
+            }
+            // Prepend emoji and a space preserving original indentation
+            int indentLen = line.Length - trimmed.Length;
+            var indent = indentLen > 0 ? line.Substring(0, indentLen) : string.Empty;
+            return indent + emoji + " " + trimmed;
+        }
+
+        private static string StripLeadingEmojis(string line)
+        {
+            // Remove any leading medal or last-place emojis and following spaces
+            var pattern = new Regex(@"^(\s*)([\uD83E\uDD47\uD83E\uDD48\uD83E\uDD49\uD83E\uDD72]\s*)+");
+            var m = pattern.Match(line);
+            if (m.Success)
+            {
+                return line.Substring(0, m.Groups[1].Length) + line.Substring(m.Length);
+            }
+            return line;
+        }
 
         private static (string key, string value) ParseGroupFromPrompt(string prompt)
         {
