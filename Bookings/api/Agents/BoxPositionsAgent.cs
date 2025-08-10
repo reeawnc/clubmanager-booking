@@ -35,12 +35,19 @@ When calling the tool:
 - If they provide a numeric group id, pass it as 'groupId'.
 
 When formatting the answer (after the tool returns JSON):
-- Produce a compact, plain-text table for each box using a fixed-width (monospace) layout inside a SINGLE triple‑backtick code block.
-- Start with the line: 'Showing current positions'.
-- For each box, print a centered caption like: 'Box A1', then a header row: 'Pos  Player                         Pld  Pts'.
-- Align numeric columns right; pad with spaces to align columns.
-- Limit to the TOP 10 rows only; if more rows exist add a line '… and N more' after the table for that box.
-- Keep to text only (no HTML). One code block wrapping all boxes is fine.
+- Output Markdown only inside ONE fenced block using ```markdown ... ```.
+- For each box:
+  - Use an H3 heading: '### Box <name>'.
+  - Then a GitHub‑flavored Markdown table with headers: Rank | Player | Pld | W | D | L | Pts.
+  - Replace any source 'Pos' header with 'Rank'.
+  - Right‑align numeric columns and left‑align text columns using GFM alignment markers in the header separator row.
+  - Ensure the Player column has a minimum width for alignment: compute the width as max(26, longest displayed player name) and pad shorter names with spaces (do not truncate). This keeps numeric columns vertically aligned even when names vary in length.
+  - Do not include any ASCII separators from the source.
+  - Preserve the existing ranking order; do not sort.
+  - Limit to the TOP 10 rows only; if more exist, add an italic line under the table: '*+N more players*'.
+- Trim excess spaces in names. Keep original capitalisation unless the whole name is lowercase, then use Title Case.
+- Bold the entire row for player name matching 'R Cunniffe' (case‑insensitive) by bolding each cell in that row.
+- Do not calculate totals; if W/D/L are missing, leave them blank.
 "),
                 new UserChatMessage(prompt)
             };
@@ -64,11 +71,11 @@ When formatting the answer (after the tool returns JSON):
                             var parameters = JsonSerializer.Deserialize<Dictionary<string, object>>(functionCall.FunctionArguments) ?? new();
                             var toolResult = await tool.ExecuteAsync(parameters);
 
-                            // Ask the LLM to format into a single plain-text monospaced table in a code block
+                            // Ask the LLM to format into a single fenced Markdown block per the rules above
                             var followUp = new List<ChatMessage>
                             {
-                                new SystemChatMessage(@"You will receive JSON containing box league positions.
-Transform it into a plain-text, fixed-width table inside one triple‑backtick code block. Include per-box captions, a header row, right-aligned numeric columns, and only the top 10 rows with an '… and N more' line if applicable. Do not return HTML; return only one code block of text."),
+                                new SystemChatMessage(@"You will receive JSON containing box league positions. Convert it into ONE ```markdown fenced block containing multiple sections:
+For each box: '### Box <name>' and a GFM table with headers: Rank | Player | Pld | W | D | L | Pts. Use alignment markers to right‑align numbers and left‑align text. Pad the Player column to a minimum width of 26 characters or the longest displayed name, whichever is larger (do not truncate), so numeric columns stay aligned. Keep rank order, limit to top 10, and if more rows exist add an italic '*+N more players*' line under the table. Trim extra spaces in names; if a name is all lowercase, title case it. Bold the entire row for player name 'R Cunniffe' (case‑insensitive) by bolding each cell. Do NOT compute missing stats; leave W/D/L blank if absent. Return only the fenced Markdown block."),
                                 new UserChatMessage($"Box positions JSON: {toolResult}")
                             };
                             var final = await _chatClient.CompleteChatAsync(followUp);
