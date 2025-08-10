@@ -26,70 +26,75 @@ namespace BookingsApi.Agents
 
         public async Task<string> HandleAsync(string prompt, string? userId = null, string? sessionId = null)
         {
-            var messages = new List<ChatMessage>
+            // Fast path: parse prompt locally to decide group, call tool directly, then single LLM pass to format
+            var (groupParamKey, groupParamValue) = ParseGroupFromPrompt(prompt);
+            if (string.IsNullOrEmpty(groupParamKey) || string.IsNullOrEmpty(groupParamValue))
+            {
+                // If we cannot infer the group, fall back to a helpful message
+                return "Please specify which group to show: 'Club' or 'SummerFriendlies', or provide a Group ID.";
+            }
+
+            var getBoxTool = _toolRegistry.GetTool("get_box_positions");
+            if (getBoxTool == null)
+            {
+                return "Box positions tool is unavailable right now.";
+            }
+
+            var parameters = new Dictionary<string, object> { [groupParamKey] = groupParamValue };
+            var toolResultJson = await getBoxTool.ExecuteAsync(parameters);
+
+            // Single formatting pass
+            var formatMessages = new List<ChatMessage>
             {
                 new SystemChatMessage(@"You are summarizing squash box positions.
 
-When calling the tool:
-- If the user mentions a named group (e.g., 'Club', 'SummerFriendlies'), pass it as 'group'.
-- If they provide a numeric group id, pass it as 'groupId'.
-
-When formatting the answer (after the tool returns JSON):
-- Output Markdown only inside ONE fenced block using ```markdown ... ```.
-- For each box:
-  - Use an H3 heading: '### Box <name>'.
-  - Then a GitHub‑flavored Markdown table with headers: Rank | Player | Pld | W | D | L | Pts.
-  - Replace any source 'Pos' header with 'Rank'.
-  - Right‑align numeric columns and left‑align text columns using GFM alignment markers in the header separator row.
-  - Ensure the Player column has a minimum width for alignment: compute the width as max(26, longest displayed player name) and pad shorter names with spaces (do not truncate). This keeps numeric columns vertically aligned even when names vary in length.
-  - Do not include any extra ASCII grid lines; each row must be exactly `| col | col | ... |` with spaces, nothing more.
-  - Preserve the existing ranking order; do not sort.
-  - Include ALL rows (no top-10 truncation). If the source had an '… and N more' marker, ignore it and print all rows provided in the JSON.
+Output Markdown only inside ONE fenced block using ```markdown ... ```.
+For each box:
+- Use an H3 heading: '### Box <name>'.
+- Then a GitHub‑flavored Markdown table with headers: Rank | Player | Pld | W | D | L | Pts.
+- Replace any source 'Pos' header with 'Rank'.
+- Right‑align numeric columns and left‑align text columns using GFM alignment markers in the header separator row.
+- Ensure each column has a stable minimum visual width so numeric columns remain perfectly vertically aligned. Compute widths as the max of a sensible minimum (Player ≥ 32) and the longest displayed cell in that column; pad with spaces as needed (do not truncate).
+- Do not include extra ASCII grid lines; each data row must be exactly `| col | col | ... |`.
+- Preserve ranking order; do not sort.
+- Include ALL rows; do not truncate. If the JSON only has partial data, render what is present and omit any '+N more' hint.
 - Trim excess spaces in names. Keep original capitalisation unless the whole name is lowercase, then use Title Case.
-- Bold the entire row for player name matching 'R Cunniffe' (case‑insensitive) by bolding each cell in that row.
 - Do not calculate totals; if W/D/L are missing, leave them blank.
-"),
-                new UserChatMessage(prompt)
+Return only the single fenced Markdown block."),
+                new UserChatMessage($"Box positions JSON: {toolResultJson}")
             };
-
-            var options = new ChatCompletionOptions();
-            foreach (var tool in _toolRegistry.GetAllTools())
-            {
-                options.Tools.Add(ChatTool.CreateFunctionTool(tool.Name, tool.Description, BinaryData.FromObjectAsJson(tool.Parameters)));
-            }
-
-            var response = await _chatClient.CompleteChatAsync(messages, options);
-            if (response.Value.ToolCalls?.Count > 0)
-            {
-                foreach (var toolCall in response.Value.ToolCalls)
-                {
-                    if (toolCall is ChatToolCall functionCall)
-                    {
-                        var tool = _toolRegistry.GetTool(functionCall.FunctionName);
-                        if (tool != null)
-                        {
-                            var parameters = JsonSerializer.Deserialize<Dictionary<string, object>>(functionCall.FunctionArguments) ?? new();
-                            var toolResult = await tool.ExecuteAsync(parameters);
-
-                            // Ask the LLM to format into a single fenced Markdown block per the rules above
-                            var followUp = new List<ChatMessage>
-                            {
-                                new SystemChatMessage(@"You will receive JSON containing box league positions. Convert it into ONE ```markdown fenced block containing multiple sections:
-For each box: '### Box <name>' and a GFM table with headers: Rank | Player | Pld | W | D | L | Pts. Use alignment markers to right‑align numbers and left‑align text. Pad the Player column to a minimum width of 32 characters or the longest displayed name, whichever is larger (do not truncate), so numeric columns stay aligned. Do not output extra ASCII grid lines (no repeated dashes/vertical rules beyond the single header separator). Keep rank order and include ALL rows (no truncation). Trim extra spaces in names; if a name is all lowercase, title case it. Bold the entire row for player name 'R Cunniffe' (case‑insensitive) by bolding each cell. Do NOT compute missing stats; leave W/D/L blank if absent. Return only the fenced Markdown block."),
-                                new UserChatMessage($"Box positions JSON: {toolResult}")
-                            };
-                            var final = await _chatClient.CompleteChatAsync(followUp);
-                            return final.Value.Content[0].Text ?? toolResult;
-                        }
-                    }
-                }
-            }
-
-            return response.Value.Content[0].Text ?? "Unable to retrieve box positions right now.";
+            var finalResponse = await _chatClient.CompleteChatAsync(formatMessages);
+            return finalResponse.Value.Content[0].Text ?? toolResultJson;
         }
 
-        // Retained for reference; no longer used because the LLM now formats the output as HTML tables.
+        // Retained for reference; no longer used
         private static string? TryFormatBoxPositions(string json) => null;
+
+        private static (string key, string value) ParseGroupFromPrompt(string prompt)
+        {
+            if (string.IsNullOrWhiteSpace(prompt)) return (string.Empty, string.Empty);
+            var text = prompt.ToLowerInvariant();
+            if (text.Contains("summerfriendlies") || text.Contains("summer friendlies") || text.Contains("friendlies"))
+            {
+                return ("group", "SummerFriendlies");
+            }
+            if (text.Contains("club"))
+            {
+                return ("group", "Club");
+            }
+            // Look for a group id number in the text
+            var digits = new StringBuilder();
+            foreach (var ch in text)
+            {
+                if (char.IsDigit(ch)) digits.Append(ch);
+                else if (digits.Length > 0) break;
+            }
+            if (digits.Length > 0)
+            {
+                return ("groupId", digits.ToString());
+            }
+            return (string.Empty, string.Empty);
+        }
 
         private static int SafeGetInt(JsonElement element)
         {
